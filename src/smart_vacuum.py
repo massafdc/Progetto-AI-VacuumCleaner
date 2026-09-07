@@ -39,6 +39,9 @@ class SmartVacuum(Problem):
 
         self.goal_position = goal
 
+        #ho aggiunto un contatore per sapere quanti stati esplora e quanto ha lavorato
+        self.node_expanded = 0
+
         # Convertiamo la griglia in tuple per renderla immutabile
         # e quindi utilizzabile all'interno degli stati di ricerca.
         grid_tuple = tuple(tuple(row) for row in grid)
@@ -51,6 +54,10 @@ class SmartVacuum(Problem):
         """
         Restituisce le azioni applicabili nello stato corrente.
         """
+
+        #il contatore si incrementa di 1 perchè ogni volta che si espande un nodo chiama il metodo action
+
+        self.node_expanded += 1
 
         position, grid = state
         row, col = position
