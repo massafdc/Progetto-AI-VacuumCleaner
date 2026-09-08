@@ -128,7 +128,7 @@ class SmartVacuum(Problem):
 
     def goal_test(self, state):
         """
-        Verifica se il goal è stato raggiunto.
+        Verifica se il goal e stato raggiunto.
 
         Il robot deve trovarsi nella posizione finale e
         tutte le celle accessibili devono essere pulite.
@@ -157,22 +157,23 @@ class SmartVacuum(Problem):
     # bella bro, qua definisco l'euristica
 
     def h(self, node):
-    """
-    Distanza di Manhattan dalla posizione corrente al goal
-    + costo minimo di pulizia rimanente (1 per D, 2 per V).
-    """
-    position, grid = node.state
-    row, col = position
-    goal_row, goal_col = self.goal_position
+        """
+        Distanza di Manhattan dalla posizione corrente al goal
+        + costo minimo di pulizia rimanente (1 per D, 2 per V).
+        """
 
-    distance_to_goal = abs(row - goal_row) + abs(col - goal_col)
+        position, grid = node.state
+        row, col = position
+        goal_row, goal_col = self.goal_position
 
-    cleaning_cost = sum(
-        1 if cell == "D" else 2 if cell == "V" else 0
-        for r in grid for cell in r
-    )
+        distance_to_goal = abs(row - goal_row) + abs(col - goal_col)
 
-    return distance_to_goal + cleaning_cost
+        cleaning_cost = sum(
+            1 if cell == "D" else 2 if cell == "V" else 0
+            for r in grid for cell in r
+        )
+
+        return distance_to_goal + cleaning_cost
 
     @staticmethod
     def _is_valid_position(row, col, grid):
