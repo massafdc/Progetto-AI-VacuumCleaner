@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import sys
 import cv2
 import joblib
 import numpy as np
@@ -29,7 +30,15 @@ CLASS_NAMES = {
 # TROVA LA PRIMA IMMAGINE
 # ============================================================
 
-def find_first_image():
+def find_image(filename=None):
+    if filename:
+        image_path = IMAGE_DIR / filename
+        if not image_path.exists():
+            raise FileNotFoundError(
+                f"Immagine non trovata: {image_path}"
+            )
+        return image_path
+
     extensions = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
 
     images = sorted(
@@ -307,7 +316,8 @@ def main():
 
     model = joblib.load(MODEL_PATH)
 
-    image_path = find_first_image()
+    filename = sys.argv[1] if len(sys.argv) > 1 else None
+    image_path = find_image(filename)
 
     print(f"Immagine utilizzata: {image_path}")
 
