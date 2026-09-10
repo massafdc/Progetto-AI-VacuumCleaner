@@ -216,6 +216,24 @@ def preprocess_image(image):
     return processed, mask, (x1, y1, x2, y2), normalized
 
 
+def predict_image(image_path, model):
+    image = cv2.imread(str(image_path), cv2.IMREAD_GRAYSCALE)
+
+    if image is None:
+        raise ValueError(f"Impossibile leggere l'immagine: {image_path}")
+
+    processed, _, _, _ = preprocess_image(image)
+
+    X = processed.reshape(1, -1)
+
+    probabilities = model.predict_proba(X)[0]
+    predicted_class = model.predict(X)[0]
+
+    letter = CLASS_NAMES[predicted_class]
+    confidence = probabilities[predicted_class]
+
+    return letter, confidence
+
 # ============================================================
 # VISUALIZZAZIONE
 # ============================================================
