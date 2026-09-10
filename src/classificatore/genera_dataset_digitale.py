@@ -30,6 +30,7 @@ CLASS_NAMES = {
 # Font comuni disponibili su macOS.
 # Lo script utilizzerà solo quelli effettivamente presenti.
 FONT_PATHS = [
+    # macOS
     "/System/Library/Fonts/Helvetica.ttc",
     "/System/Library/Fonts/Times.ttc",
     "/System/Library/Fonts/Courier.ttc",
@@ -37,6 +38,13 @@ FONT_PATHS = [
     "/System/Library/Fonts/Supplemental/Georgia.ttf",
     "/System/Library/Fonts/Supplemental/Verdana.ttf",
     "/System/Library/Fonts/Supplemental/Trebuchet MS.ttf",
+    # Windows
+    "C:/Windows/Fonts/arial.ttf",
+    "C:/Windows/Fonts/times.ttf",
+    "C:/Windows/Fonts/cour.ttf",
+    "C:/Windows/Fonts/georgia.ttf",
+    "C:/Windows/Fonts/verdana.ttf",
+    "C:/Windows/Fonts/trebuc.ttf",
 ]
 
 
