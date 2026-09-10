@@ -1,3 +1,5 @@
 numpy
 scikit-learn
 Pillow
+joblib
+opencv-python

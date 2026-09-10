@@ -27,8 +27,6 @@ CLASS_NAMES = {
     5: "X",
 }
 
-# Font comuni disponibili su macOS.
-# Lo script utilizzerà solo quelli effettivamente presenti.
 FONT_PATHS = [
     # macOS
     "/System/Library/Fonts/Helvetica.ttc",
@@ -81,20 +79,12 @@ def generate_letter_image(
     rng: np.random.Generator,
 ) -> np.ndarray:
     """
-    Genera una singola immagine 28x28 della lettera indicata.
+    Genera una singola immagine 28x28.
 
-    L'immagine viene creata in scala di grigi:
-        0   = nero
-        255 = bianco
-
-    Vengono applicate piccole variazioni di:
-        - dimensione
-        - posizione
-        - rotazione
-        - scala
+    Output:
+        vettore di 784 valori float32 normalizzati in [0, 1].
     """
 
-    # Canvas più grande del risultato finale.
     canvas_size = 64
 
     image = Image.new(
@@ -125,10 +115,11 @@ def generate_letter_image(
     text_width = bbox[2] - bbox[0]
     text_height = bbox[3] - bbox[1]
 
-    # Piccole variazioni di posizione.
+    # Posizione iniziale centrata.
     x = (canvas_size - text_width) // 2
     y = (canvas_size - text_height) // 2
 
+    # Piccole variazioni di posizione.
     x += int(rng.integers(-4, 5))
     y += int(rng.integers(-4, 5))
 
@@ -163,10 +154,11 @@ def generate_letter_image(
         dtype=np.float32,
     )
 
-    # Normalizzazione [0,255] -> [0,1].
+    # Normalizzazione [0, 255] -> [0, 1].
     array /= 255.0
 
-    return array
+    # 28x28 -> 784
+    return array.reshape(-1)
 
 
 # ============================================================
@@ -200,11 +192,11 @@ def generate_dataset() -> None:
         len(CLASS_NAMES) * SAMPLES_PER_CLASS
     )
 
+    # Ogni immagine è direttamente un vettore di 784 pixel.
     X = np.empty(
         (
             total_samples,
-            IMAGE_SIZE,
-            IMAGE_SIZE,
+            IMAGE_SIZE * IMAGE_SIZE,
         ),
         dtype=np.float32,
     )
@@ -240,7 +232,10 @@ def generate_dataset() -> None:
 
             index += 1
 
-    # Mescoliamo il dataset.
+    # ========================================================
+    # SHUFFLE
+    # ========================================================
+
     permutation = rng.permutation(
         total_samples
     )
@@ -248,7 +243,10 @@ def generate_dataset() -> None:
     X = X[permutation]
     y = y[permutation]
 
-    # Salvataggio.
+    # ========================================================
+    # SALVATAGGIO
+    # ========================================================
+
     np.save(
         OUTPUT_DIR / "X.npy",
         X,
