@@ -40,7 +40,7 @@ class SmartVacuum(Problem):
         self.goal_position = goal
 
         #ho aggiunto un contatore per sapere quanti stati esplora e quanto ha lavorato
-        self.node_expanded = 0
+        self.nodes_expanded = 0
 
         # Convertiamo la griglia in tuple per renderla immutabile
         # e quindi utilizzabile all'interno degli stati di ricerca.
@@ -57,7 +57,7 @@ class SmartVacuum(Problem):
 
         #il contatore si incrementa di 1 perchè ogni volta che si espande un nodo chiama il metodo action
 
-        self.node_expanded += 1
+        self.nodes_expanded += 1
 
         position, grid = state
         row, col = position
@@ -158,22 +158,129 @@ class SmartVacuum(Problem):
 
     def h(self, node):
         """
-        Distanza di Manhattan dalla posizione corrente al goal
-        + costo minimo di pulizia rimanente (1 per D, 2 per V).
+        Euristica A* basata su una Minimum Spanning Tree (MST).
+
+        La stima considera:
+
+        1. Il costo minimo necessario per pulire tutte le
+        celle ancora sporche:
+            D -> 1 CLEAN
+            V -> 2 CLEAN
+
+        2. Il costo minimo necessario per collegare:
+            - posizione attuale del robot
+            - tutte le celle sporche
+            - posizione finale
+
+        utilizzando una Minimum Spanning Tree.
+
+        Le distanze tra le celle sono calcolate con Manhattan.
+
+        La distanza di Manhattan può sottostimare il vero costo
+        di movimento in presenza di ostacoli X, quindi costituisce
+        un lower bound.
         """
 
         position, grid = node.state
-        row, col = position
-        goal_row, goal_col = self.goal_position
 
-        distance_to_goal = abs(row - goal_row) + abs(col - goal_col)
+        # --------------------------------------------------------
+        # 1. Raccolta delle celle ancora sporche
+        # --------------------------------------------------------
 
-        cleaning_cost = sum(
-            1 if cell == "D" else 2 if cell == "V" else 0
-            for r in grid for cell in r
-        )
+        dirty_cells = []
+        cleaning_cost = 0
 
-        return distance_to_goal + cleaning_cost
+        for r, grid_row in enumerate(grid):
+            for c, cell in enumerate(grid_row):
+
+                if cell == "D":
+                    dirty_cells.append((r, c))
+                    cleaning_cost += 1
+
+                elif cell == "V":
+                    dirty_cells.append((r, c))
+                    cleaning_cost += 2
+
+        # --------------------------------------------------------
+        # 2. Se non ci sono più celle sporche
+        # --------------------------------------------------------
+
+        if not dirty_cells:
+            row, col = position
+            goal_row, goal_col = self.goal_position
+
+            return (
+                abs(row - goal_row)
+                + abs(col - goal_col)
+            )
+
+        # --------------------------------------------------------
+        # 3. Costruiamo l'insieme dei punti che devono essere
+        #    collegati:
+        #
+        #    robot + celle sporche + goal
+        # --------------------------------------------------------
+
+        points = [position]
+
+        points.extend(dirty_cells)
+
+        points.append(self.goal_position)
+
+        # --------------------------------------------------------
+        # 4. Minimum Spanning Tree
+        #
+        #    Utilizziamo l'algoritmo di Prim.
+        # --------------------------------------------------------
+
+        visited = {0}
+
+        mst_cost = 0
+
+        while len(visited) < len(points):
+
+            best_distance = float("inf")
+            best_point = None
+
+            # Cerchiamo il collegamento più economico
+            # tra un punto già nella MST e uno ancora fuori.
+            for i in visited:
+
+                r1, c1 = points[i]
+
+                for j in range(len(points)):
+
+                    if j in visited:
+                        continue
+
+                    r2, c2 = points[j]
+
+                    distance = (
+                        abs(r1 - r2)
+                        + abs(c1 - c2)
+                    )
+
+                    if distance < best_distance:
+                        best_distance = distance
+                        best_point = j
+
+            # Aggiungiamo il collegamento minimo alla MST.
+            mst_cost += best_distance
+
+            visited.add(best_point)
+
+        # --------------------------------------------------------
+        # 5. Euristica finale
+        #
+        #    cleaning_cost:
+        #        costo obbligatorio delle operazioni CLEAN
+        #
+        #    mst_cost:
+        #        lower bound del movimento necessario per
+        #        collegare robot, celle sporche e goal
+        # --------------------------------------------------------
+
+        return cleaning_cost + mst_cost
 
     @staticmethod
     def _is_valid_position(row, col, grid):

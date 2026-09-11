@@ -1,5 +1,12 @@
 # Progetto-AI-VacuumCleaner
-
+    Da 0:
+    1 - scarica dataset emnist
+    2 - prepara dataset emnist
+    3 - genera dataset digitale
+    4 - combina dataset
+    5 - train
+    6 - evaluate
+    7 - predict_table che sfrutta : smartvacuum, predict
 # Classificatore
     Classificatore
 

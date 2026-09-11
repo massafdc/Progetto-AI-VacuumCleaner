@@ -32,12 +32,23 @@ CLASS_NAMES = {
 
 def find_image(filename=None):
     if filename:
+        # Se è stato fornito un percorso completo/relativo
+        # e il file esiste, usalo direttamente.
+        image_path = Path(filename)
+
+        if image_path.exists():
+            return image_path.resolve()
+
+        # Altrimenti considera filename come nome di un'immagine
+        # dentro tests/immagini_lettere
         image_path = IMAGE_DIR / filename
-        if not image_path.exists():
-            raise FileNotFoundError(
-                f"Immagine non trovata: {image_path}"
-            )
-        return image_path
+
+        if image_path.exists():
+            return image_path
+
+        raise FileNotFoundError(
+            f"Immagine non trovata: {filename}"
+        )
 
     extensions = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
 

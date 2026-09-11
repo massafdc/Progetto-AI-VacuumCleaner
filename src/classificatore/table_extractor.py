@@ -410,7 +410,7 @@ def validate_grid(horizontal, vertical):
 # ESTRAZIONE DELLE CELLE
 # ============================================================
 
-def extract_cells(image, horizontal, vertical):
+def extract_cells(image, horizontal, vertical, output_dir=OUTPUT_DIR):
     """
     Estrae tutte le celle nell'ordine:
 
@@ -423,10 +423,11 @@ def extract_cells(image, horizontal, vertical):
             colonna 0
             ...
 
+    Restituisce la lista dei percorsi delle celle create.
     """
 
     os.makedirs(
-        OUTPUT_DIR,
+        output_dir,
         exist_ok=True
     )
 
@@ -436,6 +437,8 @@ def extract_cells(image, horizontal, vertical):
     cols = len(vertical) - 1
 
     print(f"Griglia rilevata: {rows} x {cols}")
+
+    cell_paths = []
 
     for row in range(rows):
 
@@ -484,46 +487,63 @@ def extract_cells(image, horizontal, vertical):
             )
 
             path = os.path.join(
-                OUTPUT_DIR,
+                output_dir,
                 filename
             )
 
-            cv2.imwrite(
+            success = cv2.imwrite(
                 path,
                 cell
             )
+
+            if not success:
+                raise RuntimeError(
+                    f"Impossibile salvare la cella: {path}"
+                )
+
+            cell_paths.append(path)
 
     print(
         f"Estratte {rows * cols} celle."
     )
 
+    return cell_paths
+
 
 # ============================================================
-# PROGRAMMA PRINCIPALE
+# PIPELINE COMPLETA
 # ============================================================
 
-def main():
+def extract_table_cells(image_path, output_dir=OUTPUT_DIR):
+    """
+    Esegue l'intera pipeline di estrazione della tabella:
 
-    if len(sys.argv) != 2:
+        immagine
+            ↓
+        ricerca tabella
+            ↓
+        correzione prospettica
+            ↓
+        rilevamento linee
+            ↓
+        aggiunta bordi mancanti
+            ↓
+        validazione griglia
+            ↓
+        estrazione celle
 
-        print(
-            "Uso:\n"
-            "    python3 table_extractor.py immagine.jpg"
-        )
+    Restituisce:
+        lista dei percorsi delle celle estratte.
+    """
 
-        sys.exit(1)
-
-    image_path = sys.argv[1]
+    image_path = str(image_path)
 
     image = cv2.imread(image_path)
 
     if image is None:
-
-        print(
-            f"Errore: impossibile aprire '{image_path}'"
+        raise ValueError(
+            f"Impossibile aprire '{image_path}'"
         )
-
-        sys.exit(1)
 
     print("Immagine caricata.")
 
@@ -567,19 +587,24 @@ def main():
     # --------------------------------------------------------
 
     os.makedirs(
-        OUTPUT_DIR,
+        output_dir,
         exist_ok=True
     )
 
     rectified_path = os.path.join(
-        OUTPUT_DIR,
+        output_dir,
         "table_rectified.png"
     )
 
-    cv2.imwrite(
+    success = cv2.imwrite(
         rectified_path,
         table
     )
+
+    if not success:
+        raise RuntimeError(
+            f"Impossibile salvare '{rectified_path}'"
+        )
 
     # --------------------------------------------------------
     # 3. TROVA LE LINEE
@@ -627,43 +652,57 @@ def main():
         vertical
     ):
 
-        print()
-        print(
-            "ERRORE: la griglia rilevata non è valida."
-        )
-
-        print(
-            f"Intervalli verticali: "
-            f"{len(vertical) - 1}"
-        )
-
-        print(
+        raise ValueError(
+            "La griglia rilevata non è valida. "
             f"Intervalli orizzontali: "
-            f"{len(horizontal) - 1}"
+            f"{len(horizontal) - 1}, "
+            f"intervalli verticali: "
+            f"{len(vertical) - 1}."
         )
-
-        print()
-        print(
-            "Linee orizzontali:",
-            horizontal
-        )
-
-        print(
-            "Linee verticali:",
-            vertical
-        )
-
-        sys.exit(1)
 
     # --------------------------------------------------------
     # 7. ESTRAE LE CELLE
     # --------------------------------------------------------
 
-    extract_cells(
+    return extract_cells(
         table,
         horizontal,
-        vertical
+        vertical,
+        output_dir=output_dir
     )
+
+
+# ============================================================
+# PROGRAMMA PRINCIPALE
+# ============================================================
+
+def main():
+
+    if len(sys.argv) != 2:
+
+        print(
+            "Uso:\n"
+            "    python3 table_extractor.py immagine.jpg"
+        )
+
+        sys.exit(1)
+
+    image_path = sys.argv[1]
+
+    try:
+
+        extract_table_cells(
+            image_path,
+            output_dir=OUTPUT_DIR
+        )
+
+    except Exception as e:
+
+        print(
+            f"\nErrore: {e}"
+        )
+
+        sys.exit(1)
 
     print()
     print("Operazione completata.")
