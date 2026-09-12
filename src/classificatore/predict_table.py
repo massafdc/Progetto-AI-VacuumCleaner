@@ -9,6 +9,7 @@ from aima.search import breadth_first_graph_search, astar_search
 from .predict import predict_image, MODEL_PATH
 from .table_extractor import extract_table_cells
 from src.smart_vacuum import SmartVacuum
+from src.simulatore.simulatore import simulate, create_gif
 
 
 # ============================================================
@@ -37,18 +38,6 @@ def extract_and_classify(table_path):
 
     # Percorso assoluto dell'immagine
     table_path = Path(table_path).resolve()
-
-    # --------------------------------------------------------
-    # ESTRAZIONE DELLA TABELLA
-    # --------------------------------------------------------
-    #
-    # Prima table_extractor.py veniva eseguito come
-    # processo separato tramite subprocess.
-    #
-    # Ora utilizziamo direttamente la funzione
-    # extract_table_cells().
-    #
-    # --------------------------------------------------------
 
     extract_table_cells(
         table_path,
@@ -132,7 +121,6 @@ def build_problem(results):
     rows = max_row + 1
     cols = max_col + 1
 
-    # La griglia deve essere quadrata
     if rows != cols:
         raise ValueError(
             f"La griglia deve essere quadrata: "
@@ -158,10 +146,6 @@ def build_problem(results):
 
             letter = results[(row, col)]
 
-            # ------------------------------------------------
-            # POSIZIONE INIZIALE
-            # ------------------------------------------------
-
             if letter == "S":
 
                 if start is not None:
@@ -171,14 +155,7 @@ def build_problem(results):
                     )
 
                 start = (row, col)
-
-                # S indica la posizione del robot,
-                # quindi la cella viene considerata pulita.
                 current_row.append("C")
-
-            # ------------------------------------------------
-            # POSIZIONE FINALE
-            # ------------------------------------------------
 
             elif letter == "F":
 
@@ -189,21 +166,13 @@ def build_problem(results):
                     )
 
                 goal = (row, col)
-
-                # F indica la posizione finale,
-                # quindi la cella viene considerata pulita.
                 current_row.append("C")
-
-            # ------------------------------------------------
-            # CELLA NORMALE
-            # ------------------------------------------------
 
             else:
                 current_row.append(letter)
 
         grid.append(current_row)
 
-    # Controlla che esistano S e F
     if start is None:
         raise ValueError(
             "Nessuna posizione S trovata nella griglia."
@@ -343,7 +312,6 @@ def run_search(
 
 def main():
 
-    # Controllo argomenti
     if len(sys.argv) != 3:
 
         print("Uso:")
@@ -368,7 +336,6 @@ def main():
 
     search_mode = sys.argv[2]
 
-    # Controllo modalità
     if search_mode not in ("1", "2", "3"):
 
         print(
@@ -382,7 +349,6 @@ def main():
 
         sys.exit(1)
 
-    # Controllo esistenza immagine
     if not table_path.exists():
 
         print(
@@ -506,6 +472,40 @@ def main():
                 f"{astar_result['nodes_expanded']:>10}"
                 f"{astar_result['time']:>15.6f}"
                 f"{str(astar_result['cost']):>10}"
+            )
+
+        # ====================================================
+        # 7. SIMULAZIONE
+        # ====================================================
+
+        # Usa la soluzione di A* se disponibile (esplora meno
+        # nodi), altrimenti quella di BFS.
+        if astar_result and astar_result["solution"] is not None:
+            simulation_problem = problem_astar
+            simulation_solution = astar_result["solution"]
+        elif bfs_result and bfs_result["solution"] is not None:
+            simulation_problem = problem_bfs
+            simulation_solution = bfs_result["solution"]
+        else:
+            simulation_problem = None
+            simulation_solution = None
+
+        if simulation_solution is not None:
+
+            print(
+                "\n=== SIMULAZIONE ==="
+            )
+
+            session_dir = simulate(
+                simulation_problem,
+                simulation_solution
+            )
+
+            create_gif(session_dir)
+
+        else:
+            print(
+                "\nNessuna soluzione da simulare."
             )
 
         print(
