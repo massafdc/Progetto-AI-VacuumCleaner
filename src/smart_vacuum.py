@@ -2,32 +2,9 @@ from aima.search import Problem
 
 
 class SmartVacuum(Problem):
-    """
-    Problema di ricerca per il dominio Smart Vacuum.
 
-    La griglia è quadrata e contiene:
-        C = Clean
-        D = Dirty
-        V = Very Dirty
-        X = Inaccessible
-
-    La posizione iniziale e quella finale vengono fornite
-    separatamente rispetto alla griglia.
-    """
 
     def __init__(self, grid, start, goal):
-        """
-        Parameters
-        ----------
-        grid : list[list[str]]
-            Griglia quadrata contenente C, D, V, X.
-
-        start : tuple[int, int]
-            Posizione iniziale del robot (riga, colonna).
-
-        goal : tuple[int, int]
-            Posizione finale desiderata del robot (riga, colonna).
-        """
 
         self.grid_size = len(grid)
 
@@ -64,23 +41,18 @@ class SmartVacuum(Problem):
 
         possible_actions = []
 
-        # Movimento verso l'alto
         if self._is_valid_position(row - 1, col, grid):
             possible_actions.append("UP")
 
-        # Movimento verso il basso
         if self._is_valid_position(row + 1, col, grid):
             possible_actions.append("DOWN")
 
-        # Movimento verso sinistra
         if self._is_valid_position(row, col - 1, grid):
             possible_actions.append("LEFT")
 
-        # Movimento verso destra
         if self._is_valid_position(row, col + 1, grid):
             possible_actions.append("RIGHT")
 
-        # Pulizia della cella corrente
         current_cell = grid[row][col]
 
         if current_cell in ("D", "V"):
@@ -89,9 +61,6 @@ class SmartVacuum(Problem):
         return possible_actions
 
     def result(self, state, action):
-        """
-        Applica un'azione e restituisce il nuovo stato.
-        """
 
         position, grid = state
         row, col = position
@@ -127,12 +96,6 @@ class SmartVacuum(Problem):
         return new_position, new_grid
 
     def goal_test(self, state):
-        """
-        Verifica se il goal e stato raggiunto.
-
-        Il robot deve trovarsi nella posizione finale e
-        tutte le celle accessibili devono essere pulite.
-        """
 
         position, grid = state
 
@@ -154,28 +117,20 @@ class SmartVacuum(Problem):
         return c + 1
 
     
-    # bella bro, qua definisco l'euristica
+    ## euristica
 
     def h(self, node):
         """
         Euristica A* basata su una Minimum Spanning Tree (MST).
-
         La stima considera:
-
         1. Il costo minimo necessario per pulire tutte le
-        celle ancora sporche:
-            D -> 1 CLEAN
-            V -> 2 CLEAN
-
+        celle ancora sporche
         2. Il costo minimo necessario per collegare:
             - posizione attuale del robot
             - tutte le celle sporche
             - posizione finale
-
         utilizzando una Minimum Spanning Tree.
-
         Le distanze tra le celle sono calcolate con Manhattan.
-
         La distanza di Manhattan può sottostimare il vero costo
         di movimento in presenza di ostacoli X, quindi costituisce
         un lower bound.
