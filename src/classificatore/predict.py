@@ -321,12 +321,13 @@ def show_results(
     # --------------------------------------------------------
     # Statistiche
     # --------------------------------------------------------
-
+    '''
     print("\nStatistiche immagine finale:")
     print(f"min:  {processed.min():.4f}")
     print(f"max:  {processed.max():.4f}")
     print(f"mean: {processed.mean():.4f}")
-
+    '''
+    
     print("\nProbabilità:")
     for class_id, probability in enumerate(probabilities):
         print(

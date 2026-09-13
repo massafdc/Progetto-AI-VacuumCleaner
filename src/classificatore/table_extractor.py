@@ -20,6 +20,25 @@ CELL_MARGIN = 0.08
 # UTILITY
 # ============================================================
 
+def clear_output_dir(output_dir):
+    """
+    Svuota la cartella di output prima di una nuova estrazione.
+    La cartella viene mantenuta, ma tutti i file al suo interno
+    vengono eliminati.
+    """
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    for filename in os.listdir(output_dir):
+
+        path = os.path.join(
+            output_dir,
+            filename
+        )
+
+        if os.path.isfile(path):
+            os.remove(path)
+
 def cluster_positions(values, tolerance):
     """
     Raggruppa coordinate molto vicine.
@@ -544,6 +563,8 @@ def extract_table_cells(image_path, output_dir=OUTPUT_DIR):
         raise ValueError(
             f"Impossibile aprire '{image_path}'"
         )
+
+    clear_output_dir(output_dir)
 
     print("Immagine caricata.")
 
