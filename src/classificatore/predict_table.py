@@ -2,6 +2,7 @@ from pathlib import Path
 import shutil
 import sys
 import time
+import multiprocessing
 
 import joblib
 
@@ -19,6 +20,11 @@ from src.simulatore.simulatore import simulate, create_gif
 BASE_DIR = Path(__file__).resolve().parents[2]
 CELLS_DIR = BASE_DIR / "cells"
 
+# Tempo massimo concesso a ciascun algoritmo di ricerca.
+# Può essere modificato facilmente.
+
+SEARCH_TIMEOUT = 20.0
+
 
 # ============================================================
 # ESTRAZIONE E CLASSIFICAZIONE
@@ -32,11 +38,9 @@ def extract_and_classify(table_path):
         {(riga, colonna): lettera}
     """
 
-    # Elimina eventuali celle precedenti
     if CELLS_DIR.exists():
         shutil.rmtree(CELLS_DIR)
 
-    # Percorso assoluto dell'immagine
     table_path = Path(table_path).resolve()
 
     extract_table_cells(
@@ -44,15 +48,7 @@ def extract_and_classify(table_path):
         output_dir=CELLS_DIR
     )
 
-    # --------------------------------------------------------
-    # CARICA IL MODELLO
-    # --------------------------------------------------------
-
     model = joblib.load(MODEL_PATH)
-
-    # --------------------------------------------------------
-    # RECUPERA LE CELLE ESTRATTE
-    # --------------------------------------------------------
 
     cells = sorted(
         CELLS_DIR.glob("cell_*.png")
@@ -223,37 +219,215 @@ def print_recognized_grid(results):
 
 
 # ============================================================
-# RICERCA
+# WORKER DELLA RICERCA
+# ============================================================
+
+def _search_worker(
+    search_fn,
+    problem,
+    kwargs,
+    connection
+):
+    """
+    Esegue l'algoritmo di ricerca in un processo separato.
+
+    Questa funzione deve essere definita a livello globale
+    per essere compatibile anche con Windows (spawn).
+    """
+
+    try:
+
+        start_time = time.perf_counter()
+
+        node = search_fn(
+            problem,
+            **kwargs
+        )
+
+        elapsed = (
+            time.perf_counter()
+            - start_time
+        )
+
+        if node:
+
+            solution = node.solution()
+            cost = node.path_cost
+
+        else:
+
+            solution = None
+            cost = None
+
+        connection.send({
+            "success": True,
+            "solution": solution,
+            "cost": cost,
+            "nodes_expanded": problem.nodes_expanded,
+            "time": elapsed,
+        })
+
+    except Exception as e:
+
+        connection.send({
+            "success": False,
+            "error": str(e),
+        })
+
+    finally:
+
+        connection.close()
+
+
+# ============================================================
+# RICERCA CON TIMEOUT
 # ============================================================
 
 def run_search(
     name,
     search_fn,
     problem,
+    timeout=SEARCH_TIMEOUT,
     **kwargs
 ):
     """
-    Esegue un algoritmo di ricerca e raccoglie
-    le statistiche.
+    Esegue un algoritmo di ricerca in un processo separato.
+
+    Se l'algoritmo termina entro 'timeout' secondi,
+    restituisce il risultato.
+
+    Se supera il timeout, il processo viene terminato.
+
+    Questa funzione è indipendente dall'algoritmo utilizzato:
+    può essere usata con BFS, A*, oppure altri algoritmi.
     """
+
+    print(f"\n--- {name} ---")
+
+    print(
+        f"Timeout: {timeout:.2f} s"
+    )
+
+    parent_connection, child_connection = (
+        multiprocessing.Pipe()
+    )
+
+    process = multiprocessing.Process(
+        target=_search_worker,
+        args=(
+            search_fn,
+            problem,
+            kwargs,
+            child_connection
+        )
+    )
 
     start_time = time.perf_counter()
 
-    node = search_fn(
-        problem,
-        **kwargs
-    )
+    process.start()
+
+    # Il processo principale aspetta al massimo
+    # il timeout specificato.
+    process.join(timeout)
+
+    # --------------------------------------------------------
+    # CASO 1: L'algoritmo è ancora in esecuzione
+    # --------------------------------------------------------
+
+    if process.is_alive():
+
+        print(
+            "Timeout raggiunto."
+        )
+
+        print(
+            "Interrompo la ricerca..."
+        )
+
+        process.terminate()
+        process.join()
+
+        elapsed = (
+            time.perf_counter()
+            - start_time
+        )
+
+        parent_connection.close()
+
+        print(
+            f"Tempo: {elapsed:.6f} s"
+        )
+
+        print(
+            "Nessuna soluzione trovata "
+            "(ricerca interrotta)."
+        )
+
+        return {
+            "node": None,
+            "solution": None,
+            "nodes_expanded": None,
+            "time": elapsed,
+            "cost": None,
+            "timeout": True,
+        }
+
+    # --------------------------------------------------------
+    # CASO 2: L'algoritmo è terminato
+    # --------------------------------------------------------
 
     elapsed = (
         time.perf_counter()
         - start_time
     )
 
-    print(f"\n--- {name} ---")
+    if parent_connection.poll():
+
+        result = parent_connection.recv()
+
+    else:
+
+        result = {
+            "success": False,
+            "error": (
+                "Il processo di ricerca è terminato "
+                "senza restituire un risultato."
+            ),
+        }
+
+    parent_connection.close()
+
+    # --------------------------------------------------------
+    # ERRORE DURANTE LA RICERCA
+    # --------------------------------------------------------
+
+    if not result["success"]:
+
+        print(
+            f"Errore durante la ricerca: "
+            f"{result['error']}"
+        )
+
+        return {
+            "node": None,
+            "solution": None,
+            "nodes_expanded": None,
+            "time": elapsed,
+            "cost": None,
+            "timeout": False,
+        }
+
+    # --------------------------------------------------------
+    # RISULTATO
+    # --------------------------------------------------------
+
+    solution = result["solution"]
+    cost = result["cost"]
+    nodes_expanded = result["nodes_expanded"]
 
     print(
         f"Nodi espansi: "
-        f"{problem.nodes_expanded}"
+        f"{nodes_expanded}"
     )
 
     print(
@@ -261,9 +435,7 @@ def run_search(
         f"{elapsed:.6f} s"
     )
 
-    if node:
-
-        solution = node.solution()
+    if solution is not None:
 
         print(
             f"Lunghezza soluzione: "
@@ -272,7 +444,7 @@ def run_search(
 
         print(
             f"Costo soluzione: "
-            f"{node.path_cost}"
+            f"{cost}"
         )
 
         print("\nAzioni:")
@@ -287,22 +459,17 @@ def run_search(
 
     else:
 
-        solution = None
-
         print(
             "Nessuna soluzione trovata."
         )
 
     return {
-        "node": node,
+        "node": None,
         "solution": solution,
-        "nodes_expanded": problem.nodes_expanded,
+        "nodes_expanded": nodes_expanded,
         "time": elapsed,
-        "cost": (
-            node.path_cost
-            if node
-            else None
-        ),
+        "cost": cost,
+        "timeout": False,
     }
 
 
@@ -462,14 +629,14 @@ def main():
 
             print(
                 f"{'BFS':<30}"
-                f"{bfs_result['nodes_expanded']:>10}"
+                f"{str(bfs_result['nodes_expanded']):>10}"
                 f"{bfs_result['time']:>15.6f}"
                 f"{str(bfs_result['cost']):>10}"
             )
 
             print(
                 f"{'A*':<30}"
-                f"{astar_result['nodes_expanded']:>10}"
+                f"{str(astar_result['nodes_expanded']):>10}"
                 f"{astar_result['time']:>15.6f}"
                 f"{str(astar_result['cost']):>10}"
             )
@@ -478,15 +645,28 @@ def main():
         # 7. SIMULAZIONE
         # ====================================================
 
-        # Usa la soluzione di A* se disponibile (esplora meno
-        # nodi), altrimenti quella di BFS.
-        if astar_result and astar_result["solution"] is not None:
+        if (
+            astar_result
+            and astar_result["solution"] is not None
+        ):
+
             simulation_problem = problem_astar
-            simulation_solution = astar_result["solution"]
-        elif bfs_result and bfs_result["solution"] is not None:
+            simulation_solution = (
+                astar_result["solution"]
+            )
+
+        elif (
+            bfs_result
+            and bfs_result["solution"] is not None
+        ):
+
             simulation_problem = problem_bfs
-            simulation_solution = bfs_result["solution"]
+            simulation_solution = (
+                bfs_result["solution"]
+            )
+
         else:
+
             simulation_problem = None
             simulation_solution = None
 
@@ -504,6 +684,7 @@ def main():
             create_gif(session_dir)
 
         else:
+
             print(
                 "\nNessuna soluzione da simulare."
             )
@@ -522,4 +703,8 @@ def main():
 
 
 if __name__ == "__main__":
+
+    # Necessario per multiprocessing su Windows.
+    multiprocessing.freeze_support()
+
     main()

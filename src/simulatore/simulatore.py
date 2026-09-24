@@ -141,10 +141,11 @@ def simulate(problem, actions, output_dir=OUTPUT_DIR):
     Esegue il piano passo per passo e salva un'immagine per
     ogni stato attraversato.
 
-    Prima di iniziare, CANCELLA completamente la cartella
-    di output se esiste già, così ogni nuova simulazione
-    sostituisce la precedente invece di accumularsi o
-    mescolarsi con frame di run diversi.
+    Lo stato contiene:
+        (position, remaining_cleaning)
+
+    La griglia visualizzata viene ricostruita tramite
+    problem.get_grid(state).
     """
 
     output_dir = Path(output_dir)
@@ -154,35 +155,64 @@ def simulate(problem, actions, output_dir=OUTPUT_DIR):
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    state = problem.initial
-    position, grid = state
+    # --------------------------------------------------------
+    # STATO INIZIALE
+    # --------------------------------------------------------
 
-    # La posizione di partenza è quella del primo stato:
-    # resta fissa per tutta la simulazione (serve per
-    # etichettare sempre la stessa cella come "START",
-    # anche dopo che il robot se n'è andato).
+    state = problem.initial
+
+    position, remaining_cleaning = state
+
+    # Ricostruisce la griglia da visualizzare
+    grid = problem.get_grid(state)
+
+    # La posizione iniziale resta fissa per la visualizzazione
     start_position = position
 
     draw_frame(
-        grid, position, step=0, action_label=None,
+        grid,
+        position,
+        step=0,
+        action_label=None,
         goal_position=problem.goal_position,
         start_position=start_position,
         output_path=output_dir / "frame_00.png",
     )
 
+    # --------------------------------------------------------
+    # ESECUZIONE DELLE AZIONI
+    # --------------------------------------------------------
+
     for index, action in enumerate(actions, start=1):
-        state = problem.result(state, action)
-        position, grid = state
+
+        state = problem.result(
+            state,
+            action
+        )
+
+        position, remaining_cleaning = state
+
+        # Ricostruisce la griglia corrispondente
+        # al nuovo stato
+        grid = problem.get_grid(state)
 
         draw_frame(
-            grid, position, step=index, action_label=action,
+            grid,
+            position,
+            step=index,
+            action_label=action,
             goal_position=problem.goal_position,
             start_position=start_position,
             output_path=output_dir / f"frame_{index:02d}.png",
         )
 
-    print(f"Simulazione salvata in: {output_dir}")
-    print(f"Frame generati: {len(actions) + 1}")
+    print(
+        f"Simulazione salvata in: {output_dir}"
+    )
+
+    print(
+        f"Frame generati: {len(actions) + 1}"
+    )
 
     return output_dir
 

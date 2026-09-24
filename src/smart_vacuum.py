@@ -3,7 +3,6 @@ from aima.search import Problem
 
 class SmartVacuum(Problem):
 
-
     def __init__(self, grid, start, goal):
 
         self.grid_size = len(grid)
@@ -14,100 +13,272 @@ class SmartVacuum(Problem):
         if any(len(row) != self.grid_size for row in grid):
             raise ValueError("La griglia deve essere quadrata.")
 
+        # --------------------------------------------------------
+        # INFORMAZIONI STATICHE DEL PROBLEMA
+        # --------------------------------------------------------
+
+        # La griglia non cambia durante la ricerca.
+        self.grid = tuple(tuple(row) for row in grid)
+
         self.goal_position = goal
 
-        #ho aggiunto un contatore per sapere quanti stati esplora e quanto ha lavorato
+        if not self._is_valid_position(*start, self.grid):
+            raise ValueError("La posizione iniziale non è valida.")
+
+        if not self._is_valid_position(*goal, self.grid):
+            raise ValueError("La posizione del goal non è valida.")
+
+        # Posizioni delle celle che inizialmente devono essere pulite.
+        # Queste posizioni non cambiano durante la ricerca.
+        self.dirty_positions = []
+
+        # Numero di CLEAN necessarie per ogni cella:
+        # D -> 1
+        # V -> 2
+        for row in range(self.grid_size):
+            for col in range(self.grid_size):
+
+                cell = self.grid[row][col]
+
+                if cell == "D":
+                    self.dirty_positions.append((row, col))
+
+                elif cell == "V":
+                    self.dirty_positions.append((row, col))
+
+        self.dirty_positions = tuple(self.dirty_positions)
+
+        # Mappa posizione -> indice nella tupla dirty_positions.
+        # Serve per trovare rapidamente la cella da pulire.
+        self.dirty_index = {
+            position: index
+            for index, position in enumerate(self.dirty_positions)
+        }
+
+        # --------------------------------------------------------
+        # STATO INIZIALE
+        # --------------------------------------------------------
+
+        # Per ogni cella sporca:
+        #
+        # D -> 1 CLEAN rimanente
+        # V -> 2 CLEAN rimanenti
+        #
+        # Esempio:
+        #
+        # dirty_positions = ((0, 2), (0, 3), (0, 4))
+        #
+        # remaining_cleaning = (2, 1, 2)
+        #
+        # Il primo V necessita di 2 CLEAN,
+        # il D di 1,
+        # il secondo V di 2.
+
+        remaining_cleaning = []
+
+        for position in self.dirty_positions:
+
+            row, col = position
+            cell = self.grid[row][col]
+
+            if cell == "D":
+                remaining_cleaning.append(1)
+
+            elif cell == "V":
+                remaining_cleaning.append(2)
+
+        remaining_cleaning = tuple(remaining_cleaning)
+
+        # --------------------------------------------------------
+        # STATO
+        # --------------------------------------------------------
+        #
+        # (posizione_robot, stato_pulizia)
+        #
+        # La griglia NON fa parte dello stato.
+        #
+
+        initial_state = (
+            start,
+            remaining_cleaning
+        )
+
+        # Contatore utilizzato per analizzare la ricerca.
         self.nodes_expanded = 0
 
-        # Convertiamo la griglia in tuple per renderla immutabile
-        # e quindi utilizzabile all'interno degli stati di ricerca.
-        grid_tuple = tuple(tuple(row) for row in grid)
-
-        initial_state = (start, grid_tuple)
-
         super().__init__(initial_state)
+
+    # ============================================================
+    # ACTIONS
+    # ============================================================
 
     def actions(self, state):
         """
         Restituisce le azioni applicabili nello stato corrente.
-        """
 
-        #il contatore si incrementa di 1 perchè ogni volta che si espande un nodo chiama il metodo action
+        Stato:
+            (posizione_robot, remaining_cleaning)
+        """
 
         self.nodes_expanded += 1
 
-        position, grid = state
+        position, remaining_cleaning = state
+
         row, col = position
 
         possible_actions = []
 
-        if self._is_valid_position(row - 1, col, grid):
+        # Movimento verso l'alto
+        if self._is_valid_position(
+            row - 1,
+            col,
+            self.grid
+        ):
             possible_actions.append("UP")
 
-        if self._is_valid_position(row + 1, col, grid):
+        # Movimento verso il basso
+        if self._is_valid_position(
+            row + 1,
+            col,
+            self.grid
+        ):
             possible_actions.append("DOWN")
 
-        if self._is_valid_position(row, col - 1, grid):
+        # Movimento verso sinistra
+        if self._is_valid_position(
+            row,
+            col - 1,
+            self.grid
+        ):
             possible_actions.append("LEFT")
 
-        if self._is_valid_position(row, col + 1, grid):
+        # Movimento verso destra
+        if self._is_valid_position(
+            row,
+            col + 1,
+            self.grid
+        ):
             possible_actions.append("RIGHT")
 
-        current_cell = grid[row][col]
+        # CLEAN è possibile solo se la cella corrente
+        # necessita ancora di almeno una pulizia.
+        dirty_idx = self.dirty_index.get(position)
 
-        if current_cell in ("D", "V"):
+        if (
+            dirty_idx is not None
+            and remaining_cleaning[dirty_idx] > 0
+        ):
             possible_actions.append("CLEAN")
 
         return possible_actions
 
-    def result(self, state, action):
+    # ============================================================
+    # RESULT
+    # ============================================================
 
-        position, grid = state
+    def result(self, state, action):
+        """
+        Restituisce il nuovo stato dopo aver eseguito action.
+        """
+
+        position, remaining_cleaning = state
+
         row, col = position
 
-        new_grid = [list(r) for r in grid]
         new_position = position
 
+        # Copia della situazione di pulizia.
+        new_remaining = list(remaining_cleaning)
+
+        # --------------------------------------------------------
+        # MOVIMENTI
+        # --------------------------------------------------------
+
         if action == "UP":
-            new_position = (row - 1, col)
+
+            new_position = (
+                row - 1,
+                col
+            )
 
         elif action == "DOWN":
-            new_position = (row + 1, col)
+
+            new_position = (
+                row + 1,
+                col
+            )
 
         elif action == "LEFT":
-            new_position = (row, col - 1)
+
+            new_position = (
+                row,
+                col - 1
+            )
 
         elif action == "RIGHT":
-            new_position = (row, col + 1)
+
+            new_position = (
+                row,
+                col + 1
+            )
+
+        # --------------------------------------------------------
+        # CLEAN
+        # --------------------------------------------------------
 
         elif action == "CLEAN":
 
-            if new_grid[row][col] == "D":
-                new_grid[row][col] = "C"
+            dirty_idx = self.dirty_index.get(position)
 
-            elif new_grid[row][col] == "V":
-                new_grid[row][col] = "D"
+            if dirty_idx is None:
+                raise ValueError(
+                    "Non è possibile eseguire CLEAN su questa cella."
+                )
+
+            if new_remaining[dirty_idx] <= 0:
+                raise ValueError(
+                    "La cella è già completamente pulita."
+                )
+
+            # D: 1 -> 0
+            # V: 2 -> 1 -> 0
+            new_remaining[dirty_idx] -= 1
 
         else:
-            raise ValueError(f"Azione non valida: {action}")
 
-        new_grid = tuple(tuple(r) for r in new_grid)
+            raise ValueError(
+                f"Azione non valida: {action}"
+            )
 
-        return new_position, new_grid
+        return (
+            new_position,
+            tuple(new_remaining)
+        )
+
+    # ============================================================
+    # GOAL TEST
+    # ============================================================
 
     def goal_test(self, state):
+        """
+        Il goal è raggiunto quando:
+        1. il robot si trova sulla posizione finale;
+        2. tutte le celle sono completamente pulite.
+        """
 
-        position, grid = state
+        position, remaining_cleaning = state
 
         if position != self.goal_position:
             return False
 
-        for row in grid:
-            for cell in row:
-                if cell in ("D", "V"):
-                    return False
+        return all(
+            remaining == 0
+            for remaining in remaining_cleaning
+        )
 
-        return True
+    # ============================================================
+    # PATH COST
+    # ============================================================
 
     def path_cost(self, c, state1, action, state2):
         """
@@ -116,132 +287,231 @@ class SmartVacuum(Problem):
 
         return c + 1
 
-    
-    ## euristica
+    # ============================================================
+    # EURISTICA 1 
+    # ============================================================
 
     def h(self, node):
         """
-        Euristica A* basata su una Minimum Spanning Tree (MST).
-        La stima considera:
-        1. Il costo minimo necessario per pulire tutte le
-        celle ancora sporche
-        2. Il costo minimo necessario per collegare:
-            - posizione attuale del robot
-            - tutte le celle sporche
-            - posizione finale
-        utilizzando una Minimum Spanning Tree.
-        Le distanze tra le celle sono calcolate con Manhattan.
-        La distanza di Manhattan può sottostimare il vero costo
-        di movimento in presenza di ostacoli X, quindi costituisce
-        un lower bound.
+        Euristica per A*.
+
+        Tiene conto di:
+        - CLEAN ancora necessarie;
+        - distanza dalle celle sporche;
+        - distanza dalle celle sporche al goal.
+
+        Utilizza la distanza di Manhattan.
+
+        Gli ostacoli non vengono ignorati dal problema:
+        impediscono fisicamente i movimenti in actions().
+        La Manhattan rimane una stima inferiore della distanza
+        reale anche in presenza di ostacoli.
         """
 
-        position, grid = node.state
+        position, remaining_cleaning = node.state
+
+        row, col = position
 
         # --------------------------------------------------------
-        # 1. Raccolta delle celle ancora sporche
+        # COSTO DELLE PULIZIE RIMANENTI
         # --------------------------------------------------------
 
-        dirty_cells = []
-        cleaning_cost = 0
+        cleaning_cost = sum(remaining_cleaning)
 
-        for r, grid_row in enumerate(grid):
-            for c, cell in enumerate(grid_row):
-
-                if cell == "D":
-                    dirty_cells.append((r, c))
-                    cleaning_cost += 1
-
-                elif cell == "V":
-                    dirty_cells.append((r, c))
-                    cleaning_cost += 2
-
-        # --------------------------------------------------------
-        # 2. Se non ci sono più celle sporche
-        # --------------------------------------------------------
-
-        if not dirty_cells:
-            row, col = position
-            goal_row, goal_col = self.goal_position
+        # Se non rimane nulla da pulire,
+        # bisogna solamente raggiungere il goal.
+        if cleaning_cost == 0:
 
             return (
-                abs(row - goal_row)
-                + abs(col - goal_col)
+                abs(row - self.goal_position[0])
+                + abs(col - self.goal_position[1])
             )
 
         # --------------------------------------------------------
-        # 3. Costruiamo l'insieme dei punti che devono essere
-        #    collegati:
-        #
-        #    robot + celle sporche + goal
+        # PARTE DI MOVIMENTO
         # --------------------------------------------------------
 
-        points = [position]
+        movement_lower_bound = 0
 
-        points.extend(dirty_cells)
+        for index, remaining in enumerate(remaining_cleaning):
 
-        points.append(self.goal_position)
+            if remaining == 0:
+                continue
 
-        # --------------------------------------------------------
-        # 4. Minimum Spanning Tree
-        #
-        #    Utilizziamo l'algoritmo di Prim.
-        # --------------------------------------------------------
+            dirty_row, dirty_col = self.dirty_positions[index]
 
-        visited = {0}
+            # Robot -> cella sporca
+            distance_to_dirty = (
+                abs(row - dirty_row)
+                + abs(col - dirty_col)
+            )
 
-        mst_cost = 0
+            # Cella sporca -> goal
+            distance_to_goal = (
+                abs(dirty_row - self.goal_position[0])
+                + abs(dirty_col - self.goal_position[1])
+            )
 
-        while len(visited) < len(points):
+            # Qualunque soluzione deve necessariamente:
+            #
+            # robot -> cella sporca -> ... -> goal
+            #
+            # per ogni cella che deve essere pulita.
+            #
+            # Prendiamo il massimo perché ogni soluzione
+            # deve visitare tutte queste celle.
 
-            best_distance = float("inf")
-            best_point = None
+            lower_bound = (
+                distance_to_dirty
+                + distance_to_goal
+            )
 
-            # Cerchiamo il collegamento più economico
-            # tra un punto già nella MST e uno ancora fuori.
-            for i in visited:
+            movement_lower_bound = max(
+                movement_lower_bound,
+                lower_bound
+            )
 
-                r1, c1 = points[i]
+        return (
+            cleaning_cost
+            + movement_lower_bound
+        )
 
-                for j in range(len(points)):
 
-                    if j in visited:
-                        continue
+    # ============================================================
+    # EURISTICA 2
+    # ============================================================
 
-                    r2, c2 = points[j]
+    def h2(self, node):
+        """
+        Euristica per A* che tiene conto degli ostacoli X.
 
-                    distance = (
-                        abs(r1 - r2)
-                        + abs(c1 - c2)
-                    )
+        Utilizza la distanza minima reale sulla griglia,
+        calcolata tramite BFS.
 
-                    if distance < best_distance:
-                        best_distance = distance
-                        best_point = j
+        Tiene conto di:
+        - CLEAN ancora necessarie;
+        - distanza reale robot -> celle sporche;
+        - distanza reale celle sporche -> goal.
+        """
 
-            # Aggiungiamo il collegamento minimo alla MST.
-            mst_cost += best_distance
+        position, remaining_cleaning = node.state
 
-            visited.add(best_point)
+        # Numero di CLEAN ancora necessarie
+        cleaning_cost = sum(remaining_cleaning)
 
-        # --------------------------------------------------------
-        # 5. Euristica finale
-        #
-        #    cleaning_cost:
-        #        costo obbligatorio delle operazioni CLEAN
-        #
-        #    mst_cost:
-        #        lower bound del movimento necessario per
-        #        collegare robot, celle sporche e goal
-        # --------------------------------------------------------
+        # Se non ci sono più celle da pulire,
+        # bisogna solo raggiungere il goal.
+        if cleaning_cost == 0:
 
-        return cleaning_cost + mst_cost
+            distance = self._grid_distance(
+                position,
+                self.goal_position
+            )
+
+            return cleaning_cost + distance
+
+        movement_lower_bound = 0
+
+        for index, remaining in enumerate(remaining_cleaning):
+
+            if remaining == 0:
+                continue
+
+            dirty_position = self.dirty_positions[index]
+
+            # Distanza reale robot -> cella sporca
+            distance_to_dirty = self._grid_distance(
+                position,
+                dirty_position
+            )
+
+            # Distanza reale cella sporca -> goal
+            distance_to_goal = self._grid_distance(
+                dirty_position,
+                self.goal_position
+            )
+
+            lower_bound = (
+                distance_to_dirty
+                + distance_to_goal
+            )
+
+            movement_lower_bound = max(
+                movement_lower_bound,
+                lower_bound
+            )
+
+        return cleaning_cost + movement_lower_bound
+
+
+    def _grid_distance(self, start, goal):
+        """
+        Calcola la distanza minima tra due celle della griglia
+        usando BFS.
+
+        Le celle X non possono essere attraversate.
+
+        Restituisce:
+            - distanza minima se il goal è raggiungibile;
+            - infinito se il goal non è raggiungibile.
+        """
+
+        if start == goal:
+            return 0
+
+        queue = [(start, 0)]
+        visited = {start}
+
+        index = 0
+
+        while index < len(queue):
+
+            (row, col), distance = queue[index]
+            index += 1
+
+            neighbours = [
+                (row - 1, col),  # UP
+                (row + 1, col),  # DOWN
+                (row, col - 1),  # LEFT
+                (row, col + 1)   # RIGHT
+            ]
+
+            for next_position in neighbours:
+
+                next_row, next_col = next_position
+
+                if not self._is_valid_position(
+                    next_row,
+                    next_col,
+                    self.grid
+                ):
+                    continue
+
+                if next_position in visited:
+                    continue
+
+                if next_position == goal:
+                    return distance + 1
+
+                visited.add(next_position)
+
+                queue.append(
+                    (next_position, distance + 1)
+                )
+
+        return float("inf")
+
+
+    # ============================================================
+    # UTILITY
+    # ============================================================
 
     @staticmethod
     def _is_valid_position(row, col, grid):
         """
-        Verifica se una posizione è interna alla griglia
-        e non corrisponde a una cella X.
+        Controlla che la posizione:
+        - sia dentro la griglia;
+        - non sia un ostacolo X.
         """
 
         size = len(grid)
@@ -256,3 +526,40 @@ class SmartVacuum(Problem):
             return False
 
         return True
+
+    # ============================================================
+    # RICOSTRUZIONE DELLA GRIGLIA
+    # ============================================================
+
+    def get_grid(self, state):
+        """
+        Ricostruisce la griglia corrispondente allo stato.
+
+        È utile solamente per visualizzare/debuggare lo stato,
+        non viene utilizzata come parte dello stato di ricerca.
+        """
+
+        position, remaining_cleaning = state
+
+        new_grid = [
+            list(row)
+            for row in self.grid
+        ]
+
+        for index, remaining in enumerate(remaining_cleaning):
+
+            row, col = self.dirty_positions[index]
+
+            if remaining == 2:
+                new_grid[row][col] = "V"
+
+            elif remaining == 1:
+                new_grid[row][col] = "D"
+
+            else:
+                new_grid[row][col] = "C"
+
+        return tuple(
+            tuple(row)
+            for row in new_grid
+        )
