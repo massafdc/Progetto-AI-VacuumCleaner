@@ -486,14 +486,15 @@ def main():
             "python3 -m "
             "src.classificatore.predict_table "
             "percorso/tabella.png "
-            "[1|2|3]"
+            "[1|2|3|4]"
         )
 
         print()
         print("Modalità:")
         print("  1 = BFS")
-        print("  2 = A*")
-        print("  3 = BFS + A*")
+        print("  2 = A* con h")
+        print("  3 = A* con h2")
+        print("  4 = confronto BFS, A* con h e A* con h2")
 
         sys.exit(1)
 
@@ -503,7 +504,7 @@ def main():
 
     search_mode = sys.argv[2]
 
-    if search_mode not in ("1", "2", "3"):
+    if search_mode not in ("1", "2", "3", "4"):
 
         print(
             "\nErrore: modalità di ricerca non valida."
@@ -511,8 +512,9 @@ def main():
 
         print("Usa:")
         print("  1 = BFS")
-        print("  2 = A*")
-        print("  3 = BFS + A*")
+        print("  2 = A* con h")
+        print("  3 = A* con h2")
+        print("  4 = confronto BFS, A* con h e A* con h2")
 
         sys.exit(1)
 
@@ -573,7 +575,7 @@ def main():
 
         bfs_result = None
 
-        if search_mode in ("1", "3"):
+        if search_mode in ("1", "4"):
 
             problem_bfs = SmartVacuum(
                 grid,
@@ -588,12 +590,12 @@ def main():
             )
 
         # ====================================================
-        # 5. A*
+        # 5. A* con h
         # ====================================================
 
         astar_result = None
 
-        if search_mode in ("2", "3"):
+        if search_mode in ("2", "4"):
 
             problem_astar = SmartVacuum(
                 grid,
@@ -602,20 +604,37 @@ def main():
             )
 
             astar_result = run_search(
-                "A* (ricerca informata)",
+                "A* (euristica h)",
                 astar_search,
                 problem_astar,
                 h=problem_astar.h
+            )
+
+        astar_h2_result = None
+
+        if search_mode in ("3", "4"):
+
+            problem_astar_h2 = SmartVacuum(
+                grid,
+                start,
+                goal
+            )
+
+            astar_h2_result = run_search(
+                "A* (euristica h2)",
+                astar_search,
+                problem_astar_h2,
+                h=problem_astar_h2.h2
             )
 
         # ====================================================
         # 6. CONFRONTO
         # ====================================================
 
-        if search_mode == "3":
+        if search_mode == "4":
 
             print(
-                "\n=== CONFRONTO RICERCHE ===\n"
+                "\n=== CONFRONTO RICERCHE ED EURISTICHE ===\n"
             )
 
             print(
@@ -635,10 +654,17 @@ def main():
             )
 
             print(
-                f"{'A*':<30}"
+                f"{'A* con h':<30}"
                 f"{str(astar_result['nodes_expanded']):>10}"
                 f"{astar_result['time']:>15.6f}"
                 f"{str(astar_result['cost']):>10}"
+            )
+
+            print(
+                f"{'A* con h2':<30}"
+                f"{str(astar_h2_result['nodes_expanded']):>10}"
+                f"{astar_h2_result['time']:>15.6f}"
+                f"{str(astar_h2_result['cost']):>10}"
             )
 
         # ====================================================
@@ -653,6 +679,16 @@ def main():
             simulation_problem = problem_astar
             simulation_solution = (
                 astar_result["solution"]
+            )
+
+        elif (
+            astar_h2_result
+            and astar_h2_result["solution"] is not None
+        ):
+
+            simulation_problem = problem_astar_h2
+            simulation_solution = (
+                astar_h2_result["solution"]
             )
 
         elif (

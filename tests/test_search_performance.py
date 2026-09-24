@@ -18,6 +18,39 @@ def run_search(name, search_fn, problem, **kwargs):
     print()
 
 
+def compare_heuristics(grid, start, goal):
+    """Confronta A* usando le due euristiche di SmartVacuum."""
+    results = []
+
+    for name, heuristic_name in (("A* con h", "h"), ("A* con h2", "h2")):
+        problem = SmartVacuum(grid, start, goal)
+        heuristic = getattr(problem, heuristic_name)
+
+        start_time = time.perf_counter()
+        node = astar_search(problem, h=heuristic)
+        elapsed = time.perf_counter() - start_time
+
+        result = {
+            "name": name,
+            "node": node,
+            "nodes_expanded": problem.nodes_expanded,
+            "time": elapsed,
+            "cost": node.path_cost if node else None,
+        }
+        results.append(result)
+
+        print(f"--- {name} ---")
+        print(f"Nodi espansi: {result['nodes_expanded']}")
+        print(f"Tempo: {result['time']:.4f} s")
+        print(f"Costo: {result['cost']}")
+        print()
+
+    if all(result["node"] for result in results):
+        assert results[0]["cost"] == results[1]["cost"]
+
+    return results
+
+
 if __name__ == "__main__":
     grid = [
         ["C", "D", "C"],
@@ -32,3 +65,6 @@ if __name__ == "__main__":
 
     problem_astar = SmartVacuum(grid, start, goal)
     run_search("A* (informata, h)", astar_search, problem_astar, h=problem_astar.h)
+
+    print("=== CONFRONTO TRA LE DUE EURISTICHE ===")
+    compare_heuristics(grid, start, goal)
