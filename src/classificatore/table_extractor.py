@@ -1,40 +1,64 @@
+
 import cv2
 import numpy as np
-from pathlib import Path
+import os
+import sys
 
 
 # ============================================================
 # CONFIGURAZIONE
 # ============================================================
 
-CELL_MARGIN = 0.10
+OUTPUT_DIR = "cells_test_1"
+
+# Percentuale della cella da eliminare lungo i bordi.
+CELL_MARGIN = 0.08
 
 
 # ============================================================
-# ORDINE DEI PUNTI
+# UTILITY
 # ============================================================
 
-def order_points(points):
+def clear_output_dir(output_dir):
     """
-    Ordina i quattro vertici come:
+    Svuota la cartella di output prima di una nuova estrazione.
+    """
+    os.makedirs(output_dir, exist_ok=True)
 
-        top-left     top-right
-        bottom-left  bottom-right
+    for filename in os.listdir(output_dir):
+
+        path = os.path.join(
+            output_dir,
+            filename
+        )
+
+        if os.path.isfile(path):
+            os.remove(path)
+
+
+def cluster_positions(values, tolerance):
+    """
+    Raggruppa coordinate molto vicine.
     """
 
-    points = np.array(points, dtype=np.float32)
+    if len(values) == 0:
+        return []
 
-    ordered = np.zeros((4, 2), dtype=np.float32)
+    values = sorted(values)
 
-    sums = points.sum(axis=1)
-    diffs = np.diff(points, axis=1).flatten()
+    clusters = [[values[0]]]
 
-    ordered[0] = points[np.argmin(sums)]   # top-left
-    ordered[1] = points[np.argmin(diffs)]  # top-right
-    ordered[2] = points[np.argmax(sums)]   # bottom-right
-    ordered[3] = points[np.argmax(diffs)]  # bottom-left
+    for value in values[1:]:
 
-    return ordered
+        if abs(value - np.mean(clusters[-1])) <= tolerance:
+            clusters[-1].append(value)
+        else:
+            clusters.append([value])
+
+    return [
+        int(round(np.mean(c)))
+        for c in clusters
+    ]
 
 
 # ============================================================
@@ -42,67 +66,58 @@ def order_points(points):
 # ============================================================
 
 def create_binary(image):
-    """
-    Crea una versione binaria dell'immagine
-    utile per rilevare la griglia.
-    """
 
     gray = cv2.cvtColor(
         image,
         cv2.COLOR_BGR2GRAY
     )
 
-    blur = cv2.GaussianBlur(
+    gray = cv2.GaussianBlur(
         gray,
         (5, 5),
         0
     )
 
     binary = cv2.adaptiveThreshold(
-        blur,
+        gray,
         255,
         cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
         cv2.THRESH_BINARY_INV,
-        11,
-        5
+        31,
+        10
     )
 
     return binary
 
 
 # ============================================================
-# RILEVAMENTO TABELLA
+# RILEVAMENTO DELLE LINEE
 # ============================================================
 
-def find_table_corners(image):
-    """
-    Cerca il quadrilatero esterno della tabella.
-
-    Restituisce i quattro vertici oppure None.
-    """
+def detect_grid_lines(image):
 
     binary = create_binary(image)
 
-    height, width = binary.shape
+    h, w = binary.shape
 
-    horizontal_size = max(
-        20,
-        width // 15
+    horizontal_length = max(
+        15,
+        w // 20
     )
 
-    vertical_size = max(
-        20,
-        height // 15
+    vertical_length = max(
+        15,
+        h // 20
     )
 
     horizontal_kernel = cv2.getStructuringElement(
         cv2.MORPH_RECT,
-        (horizontal_size, 1)
+        (horizontal_length, 1)
     )
 
     vertical_kernel = cv2.getStructuringElement(
         cv2.MORPH_RECT,
-        (1, vertical_size)
+        (1, vertical_length)
     )
 
     horizontal = cv2.morphologyEx(
@@ -115,241 +130,6 @@ def find_table_corners(image):
         binary,
         cv2.MORPH_OPEN,
         vertical_kernel
-    )
-
-    grid = cv2.bitwise_or(
-        horizontal,
-        vertical
-    )
-
-    kernel = cv2.getStructuringElement(
-        cv2.MORPH_RECT,
-        (7, 7)
-    )
-
-    grid = cv2.morphologyEx(
-        grid,
-        cv2.MORPH_CLOSE,
-        kernel
-    )
-
-    contours, _ = cv2.findContours(
-        grid,
-        cv2.RETR_EXTERNAL,
-        cv2.CHAIN_APPROX_SIMPLE
-    )
-
-    image_area = width * height
-
-    candidates = []
-
-    for contour in contours:
-
-        area = cv2.contourArea(contour)
-
-        if area < image_area * 0.05:
-            continue
-
-        perimeter = cv2.arcLength(
-            contour,
-            True
-        )
-
-        approximation = cv2.approxPolyDP(
-            contour,
-            0.02 * perimeter,
-            True
-        )
-
-        if len(approximation) == 4:
-
-            candidates.append(
-                (
-                    area,
-                    approximation.reshape(4, 2)
-                )
-            )
-
-    if not candidates:
-        return None
-
-    candidates.sort(
-        key=lambda x: x[0],
-        reverse=True
-    )
-
-    return order_points(
-        candidates[0][1]
-    )
-
-
-# ============================================================
-# CORREZIONE PROSPETTIVA
-# ============================================================
-
-def rectify_table(image, corners):
-    """
-    Corregge la prospettiva della fotografia.
-
-    La tabella viene trasformata in un'immagine quadrata.
-    """
-
-    corners = order_points(corners)
-
-    top_left = corners[0]
-    top_right = corners[1]
-    bottom_right = corners[2]
-    bottom_left = corners[3]
-
-    width_top = np.linalg.norm(
-        top_right - top_left
-    )
-
-    width_bottom = np.linalg.norm(
-        bottom_right - bottom_left
-    )
-
-    height_left = np.linalg.norm(
-        bottom_left - top_left
-    )
-
-    height_right = np.linalg.norm(
-        bottom_right - top_right
-    )
-
-    width = int(
-        max(
-            width_top,
-            width_bottom
-        )
-    )
-
-    height = int(
-        max(
-            height_left,
-            height_right
-        )
-    )
-
-    # La griglia è quadrata.
-    size = max(
-        width,
-        height
-    )
-
-    destination = np.array(
-        [
-            [0, 0],
-            [size - 1, 0],
-            [size - 1, size - 1],
-            [0, size - 1]
-        ],
-        dtype=np.float32
-    )
-
-    matrix = cv2.getPerspectiveTransform(
-        corners,
-        destination
-    )
-
-    rectified = cv2.warpPerspective(
-        image,
-        matrix,
-        (size, size)
-    )
-
-    return rectified
-
-
-# ============================================================
-# RILEVAMENTO LINEE
-# ============================================================
-
-def cluster_positions(positions, max_distance=10):
-    """
-    Raggruppa coordinate vicine appartenenti alla stessa linea.
-
-    Esempio:
-
-        [100, 101, 102, 103, 150, 151]
-
-    diventa:
-
-        [101.5, 150.5]
-    """
-
-    if len(positions) == 0:
-        return []
-
-    positions = sorted(
-        positions
-    )
-
-    groups = []
-    current_group = [
-        positions[0]
-    ]
-
-    for position in positions[1:]:
-
-        if (
-            position
-            - current_group[-1]
-            <= max_distance
-        ):
-            current_group.append(
-                position
-            )
-
-        else:
-            groups.append(
-                current_group
-            )
-
-            current_group = [
-                position
-            ]
-
-    groups.append(
-        current_group
-    )
-
-    return [
-        int(round(np.mean(group)))
-        for group in groups
-    ]
-
-
-def detect_grid_lines(table):
-    """
-    Rileva le linee orizzontali e verticali della griglia.
-
-    Le posizioni servono esclusivamente per determinare
-    quante celle sono presenti.
-    """
-
-    binary = create_binary(
-        table
-    )
-
-    height, width = binary.shape
-
-    # --------------------------------------------------------
-    # Linee orizzontali
-    # --------------------------------------------------------
-
-    horizontal_kernel = cv2.getStructuringElement(
-        cv2.MORPH_RECT,
-        (
-            max(15, width // 20),
-            1
-        )
-    )
-
-    horizontal = cv2.morphologyEx(
-        binary,
-        cv2.MORPH_OPEN,
-        horizontal_kernel
     )
 
     horizontal_projection = np.sum(
@@ -357,357 +137,475 @@ def detect_grid_lines(table):
         axis=1
     )
 
-    horizontal_positions = np.where(
-        horizontal_projection
-        > width * 0.25
-    )[0]
-
-    horizontal_lines = cluster_positions(
-        horizontal_positions
-    )
-
-    # --------------------------------------------------------
-    # Linee verticali
-    # --------------------------------------------------------
-
-    vertical_kernel = cv2.getStructuringElement(
-        cv2.MORPH_RECT,
-        (
-            1,
-            max(15, height // 20)
-        )
-    )
-
-    vertical = cv2.morphologyEx(
-        binary,
-        cv2.MORPH_OPEN,
-        vertical_kernel
-    )
-
     vertical_projection = np.sum(
         vertical > 0,
         axis=0
     )
 
-    vertical_positions = np.where(
-        vertical_projection
-        > height * 0.25
+    horizontal_threshold = w * 0.30
+    vertical_threshold = h * 0.30
+
+    horizontal_indices = np.where(
+        horizontal_projection > horizontal_threshold
     )[0]
 
-    vertical_lines = cluster_positions(
-        vertical_positions
+    vertical_indices = np.where(
+        vertical_projection > vertical_threshold
+    )[0]
+
+    horizontal_positions = cluster_positions(
+        horizontal_indices.tolist(),
+        tolerance=max(5, h // 150)
+    )
+
+    vertical_positions = cluster_positions(
+        vertical_indices.tolist(),
+        tolerance=max(5, w // 150)
     )
 
     return (
-        horizontal_lines,
-        vertical_lines
+        horizontal_positions,
+        vertical_positions
     )
 
 
 # ============================================================
-# DETERMINAZIONE DIMENSIONE GRIGLIA
+# FALLBACK: BORDI DELL'IMMAGINE
 # ============================================================
 
-def detect_grid_size(table):
+def add_missing_borders(
+    horizontal,
+    vertical,
+    image
+):
+
+    h, w = image.shape[:2]
+
+    horizontal = list(horizontal)
+    vertical = list(vertical)
+
+    if len(horizontal) < 2:
+
+        if not horizontal or horizontal[0] > 0:
+            horizontal.insert(0, 0)
+
+        horizontal.append(h - 1)
+
+    if len(vertical) < 2:
+
+        if not vertical or vertical[0] > 0:
+            vertical.insert(0, 0)
+
+        vertical.append(w - 1)
+
+    return horizontal, vertical
+
+
+# ============================================================
+# VALIDAZIONE DELLA GRIGLIA
+# ============================================================
+
+def validate_grid(
+    horizontal,
+    vertical
+):
+
+    rows = len(horizontal) - 1
+    cols = len(vertical) - 1
+
+    if rows < 1 or cols < 1:
+        return False
+
+    if rows != cols:
+        return False
+
+    if rows > 100:
+        return False
+
+    return True
+
+
+# ============================================================
+# VISUALIZZAZIONE DEL RILEVAMENTO
+# ============================================================
+
+def create_debug_image(
+    image,
+    horizontal,
+    vertical
+):
     """
-    Determina automaticamente N per una griglia N x N.
+    Crea un'immagine sulla quale vengono disegnate
+    le linee rilevate.
 
-    Una griglia N x N ha N+1 linee per direzione.
+    Verde = linee orizzontali
+    Rosso = linee verticali
     """
 
-    horizontal_lines, vertical_lines = (
-        detect_grid_lines(table)
-    )
+    debug = image.copy()
 
-    print(
-        f"Linee orizzontali trovate: "
-        f"{len(horizontal_lines)}"
-    )
+    h, w = debug.shape[:2]
 
-    print(
-        f"Linee verticali trovate: "
-        f"{len(vertical_lines)}"
-    )
+    for y in horizontal:
 
-    horizontal_cells = (
-        len(horizontal_lines) - 1
-    )
-
-    vertical_cells = (
-        len(vertical_lines) - 1
-    )
-
-    print(
-        f"Celle orizzontali: "
-        f"{horizontal_cells}"
-    )
-
-    print(
-        f"Celle verticali: "
-        f"{vertical_cells}"
-    )
-
-    if horizontal_cells <= 0:
-        return None
-
-    if vertical_cells <= 0:
-        return None
-
-    if horizontal_cells != vertical_cells:
-
-        raise ValueError(
-            "La griglia rilevata non è quadrata: "
-            f"{horizontal_cells}x{vertical_cells}."
+        cv2.line(
+            debug,
+            (0, y),
+            (w - 1, y),
+            (0, 255, 0),
+            2
         )
 
-    return horizontal_cells
+    for x in vertical:
+
+        cv2.line(
+            debug,
+            (x, 0),
+            (x, h - 1),
+            (0, 0, 255),
+            2
+        )
+
+    return debug
 
 
 # ============================================================
-# ESTRAZIONE CELLE
+# VISUALIZZAZIONE CELLE
 # ============================================================
 
-def extract_cells(table, grid_size, output_dir):
+def create_cells_preview(
+    image,
+    horizontal,
+    vertical
+):
     """
-    Divide la tabella rettificata in N x N celle.
-
-    Le celle vengono estratte geometricamente,
-    lasciando un margine interno per evitare
-    che le linee della griglia vengano classificate.
+    Crea un'immagine di anteprima con i rettangoli
+    delle celle.
     """
 
-    output_dir = Path(
-        output_dir
-    )
+    preview = image.copy()
 
-    output_dir.mkdir(
-        parents=True,
+    rows = len(horizontal) - 1
+    cols = len(vertical) - 1
+
+    for row in range(rows):
+
+        for col in range(cols):
+
+            x1 = vertical[col]
+            x2 = vertical[col + 1]
+
+            y1 = horizontal[row]
+            y2 = horizontal[row + 1]
+
+            cv2.rectangle(
+                preview,
+                (x1, y1),
+                (x2, y2),
+                (255, 0, 0),
+                2
+            )
+
+            cv2.putText(
+                preview,
+                f"{row},{col}",
+                (x1 + 5, y1 + 20),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (255, 0, 0),
+                1
+            )
+
+    return preview
+
+
+# ============================================================
+# ESTRAZIONE DELLE CELLE
+# ============================================================
+
+def extract_cells(
+    image,
+    horizontal,
+    vertical,
+    output_dir=OUTPUT_DIR
+):
+
+    os.makedirs(
+        output_dir,
         exist_ok=True
     )
 
-    height, width = table.shape[:2]
+    h, w = image.shape[:2]
 
-    cell_width = (
-        width / grid_size
-    )
-
-    cell_height = (
-        height / grid_size
-    )
+    rows = len(horizontal) - 1
+    cols = len(vertical) - 1
 
     print(
-        f"Griglia rilevata: "
-        f"{grid_size} x {grid_size}"
+        f"Griglia rilevata: {rows} x {cols}"
     )
 
-    count = 0
+    cell_paths = []
 
-    for row in range(grid_size):
+    for row in range(rows):
 
-        for col in range(grid_size):
+        y1 = horizontal[row]
+        y2 = horizontal[row + 1]
 
-            x1 = int(
-                col * cell_width
-            )
+        for col in range(cols):
 
-            y1 = int(
-                row * cell_height
-            )
+            x1 = vertical[col]
+            x2 = vertical[col + 1]
 
-            x2 = int(
-                (col + 1)
-                * cell_width
-            )
-
-            y2 = int(
-                (row + 1)
-                * cell_height
-            )
-
-            # ------------------------------------------------
-            # Margine interno
-            # ------------------------------------------------
+            cell_width = x2 - x1
+            cell_height = y2 - y1
 
             margin_x = int(
-                (x2 - x1)
-                * CELL_MARGIN
+                cell_width * CELL_MARGIN
             )
 
             margin_y = int(
-                (y2 - y1)
-                * CELL_MARGIN
+                cell_height * CELL_MARGIN
             )
 
-            x1_crop = x1 + margin_x
-            y1_crop = y1 + margin_y
+            crop_x1 = max(
+                0,
+                x1 + margin_x
+            )
 
-            x2_crop = x2 - margin_x
-            y2_crop = y2 - margin_y
+            crop_x2 = min(
+                w,
+                x2 - margin_x
+            )
 
-            cell = table[
-                y1_crop:y2_crop,
-                x1_crop:x2_crop
+            crop_y1 = max(
+                0,
+                y1 + margin_y
+            )
+
+            crop_y2 = min(
+                h,
+                y2 - margin_y
+            )
+
+            cell = image[
+                crop_y1:crop_y2,
+                crop_x1:crop_x2
             ]
 
-            output_path = (
-                output_dir
-                / f"cell_{row:02d}_{col:02d}.png"
+            filename = (
+                f"cell_{row:02d}_{col:02d}.png"
             )
 
-            cv2.imwrite(
-                str(output_path),
+            path = os.path.join(
+                output_dir,
+                filename
+            )
+
+            success = cv2.imwrite(
+                path,
                 cell
             )
 
-            count += 1
+            if not success:
+                raise RuntimeError(
+                    f"Impossibile salvare: {path}"
+                )
+
+            cell_paths.append(path)
 
     print(
-        f"Estratte {count} celle."
+        f"Estratte {rows * cols} celle."
     )
+
+    return cell_paths
 
 
 # ============================================================
-# FUNZIONE PUBBLICA
+# PIPELINE COMPLETA
 # ============================================================
 
 def extract_table_cells(
     image_path,
-    output_dir="cells"
+    output_dir=OUTPUT_DIR
 ):
-    """
-    Pipeline completa:
 
-        immagine
-          ↓
-        rilevamento tabella
-          ↓
-        correzione prospettiva
-          ↓
-        rilevamento dimensione N
-          ↓
-        estrazione N x N celle
-
-    Questa è la funzione utilizzata da predict_table.py.
-    """
-
-    image_path = Path(
-        image_path
-    )
-
-    output_dir = Path(
-        output_dir
-    )
+    image_path = str(image_path)
 
     image = cv2.imread(
-        str(image_path)
+        image_path
     )
 
     if image is None:
 
         raise ValueError(
-            f"Impossibile leggere "
-            f"l'immagine: {image_path}"
+            f"Impossibile aprire '{image_path}'"
         )
+
+    clear_output_dir(
+        output_dir
+    )
 
     print(
         "Immagine caricata."
     )
 
-    print(
-        "Cerco la tabella..."
-    )
-
-    corners = find_table_corners(
-        image
-    )
-
-    if corners is None:
-
-        raise ValueError(
-            "Tabella non rilevata."
-        )
-
-    print(
-        "Tabella trovata."
-    )
-
-    print(
-        "Correggo la prospettiva..."
-    )
-
-    table = rectify_table(
-        image,
-        corners
-    )
-
-    rectified_path = (
-        output_dir
-        / "table_rectified.png"
-    )
-
-    output_dir.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-    cv2.imwrite(
-        str(rectified_path),
-        table
-    )
-
-    print(
-        "Tabella rettificata salvata."
-    )
+    # --------------------------------------------------------
+    # 1. TROVA LE LINEE
+    # --------------------------------------------------------
 
     print(
         "Cerco le linee della griglia..."
     )
 
-    grid_size = detect_grid_size(
-        table
+    horizontal, vertical = (
+        detect_grid_lines(image)
     )
 
-    if grid_size is None:
+    print(
+        f"Linee orizzontali trovate: "
+        f"{len(horizontal)}"
+    )
+
+    print(
+        f"Linee verticali trovate: "
+        f"{len(vertical)}"
+    )
+
+    # --------------------------------------------------------
+    # 2. AGGIUNGE EVENTUALI BORDI
+    # --------------------------------------------------------
+
+    horizontal, vertical = (
+        add_missing_borders(
+            horizontal,
+            vertical,
+            image
+        )
+    )
+
+    # --------------------------------------------------------
+    # 3. ORDINA
+    # --------------------------------------------------------
+
+    horizontal = sorted(horizontal)
+    vertical = sorted(vertical)
+
+    # --------------------------------------------------------
+    # 4. SALVA DEBUG
+    # --------------------------------------------------------
+
+    debug = create_debug_image(
+        image,
+        horizontal,
+        vertical
+    )
+
+    debug_path = os.path.join(
+        output_dir,
+        "debug_lines.png"
+    )
+
+    cv2.imwrite(
+        debug_path,
+        debug
+    )
+
+    preview = create_cells_preview(
+        image,
+        horizontal,
+        vertical
+    )
+
+    preview_path = os.path.join(
+        output_dir,
+        "debug_cells.png"
+    )
+
+    cv2.imwrite(
+        preview_path,
+        preview
+    )
+
+    # --------------------------------------------------------
+    # 5. VALIDAZIONE
+    # --------------------------------------------------------
+
+    if not validate_grid(
+        horizontal,
+        vertical
+    ):
 
         raise ValueError(
-            "Impossibile determinare "
-            "la dimensione della griglia."
+            "La griglia rilevata non è valida. "
+            f"Intervalli orizzontali: "
+            f"{len(horizontal) - 1}, "
+            f"intervalli verticali: "
+            f"{len(vertical) - 1}."
         )
 
-    extract_cells(
-        table,
-        grid_size,
+    # --------------------------------------------------------
+    # 6. ESTRAZIONE
+    # --------------------------------------------------------
+
+    return extract_cells(
+        image,
+        horizontal,
+        vertical,
         output_dir
     )
 
+
+# ============================================================
+# MAIN
+# ============================================================
+
+def main():
+
+    if len(sys.argv) != 2:
+
+        print(
+            "Uso:\n"
+            "    python3 table_extractor_1.py immagine.jpg"
+        )
+
+        sys.exit(1)
+
+    try:
+
+        extract_table_cells(
+            sys.argv[1]
+        )
+
+    except Exception as e:
+
+        print(
+            f"\nErrore: {e}"
+        )
+
+        sys.exit(1)
+
+    print()
     print(
         "Operazione completata."
     )
 
     print(
-        f"Output: {output_dir}"
+        f"Output: {OUTPUT_DIR}/"
     )
 
-    return grid_size
+    print()
+    print(
+        "File di debug:"
+    )
 
+    print(
+        f"  {OUTPUT_DIR}/debug_lines.png"
+    )
 
-# ============================================================
-# ESECUZIONE DIRETTA
-# ============================================================
+    print(
+        f"  {OUTPUT_DIR}/debug_cells.png"
+    )
+
 
 if __name__ == "__main__":
-
-    import sys
-
-    if len(sys.argv) != 2:
-
-        print(
-            "Uso: python table_extractor.py "
-            "<immagine>"
-        )
-
-        sys.exit(1)
-
-    extract_table_cells(
-        sys.argv[1]
-    )
+    main()
