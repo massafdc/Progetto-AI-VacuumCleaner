@@ -14,9 +14,11 @@ DATA_DIR = BASE_DIR / "data" / "combined" / "processed"
 
 IMAGE_SIZE = 28
 
-NUM_IMAGES = 25
+# Numero di immagini visualizzate
+NUM_IMAGES = 50
 
-RANDOM_SEED = 42
+# Numero di immagini per riga
+COLUMNS = 10
 
 CLASS_NAMES = {
     0: "C",
@@ -60,16 +62,19 @@ def load_dataset():
 def show_images(X, y):
     """
     Visualizza un campione casuale di immagini.
-    """
 
-    rng = np.random.default_rng(
-        RANDOM_SEED
-    )
+    Le immagini vengono selezionate casualmente ad ogni
+    esecuzione del programma.
+    """
 
     num_images = min(
         NUM_IMAGES,
         len(X),
     )
+
+    # Nessun seed:
+    # ogni esecuzione produce un campione diverso.
+    rng = np.random.default_rng()
 
     indices = rng.choice(
         len(X),
@@ -77,11 +82,14 @@ def show_images(X, y):
         replace=False,
     )
 
-    columns = 5
-    rows = int(np.ceil(num_images / columns))
+    rows = int(
+        np.ceil(
+            num_images / COLUMNS
+        )
+    )
 
     plt.figure(
-        figsize=(10, 10)
+        figsize=(16, 2 * rows)
     )
 
     for position, index in enumerate(indices):
@@ -97,7 +105,7 @@ def show_images(X, y):
 
         plt.subplot(
             rows,
-            columns,
+            COLUMNS,
             position + 1,
         )
 
@@ -109,7 +117,8 @@ def show_images(X, y):
         )
 
         plt.title(
-            f"Classe: {letter}"
+            letter,
+            fontsize=10,
         )
 
         plt.axis("off")

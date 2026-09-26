@@ -38,7 +38,7 @@ COMBINED_DIR = (
 
 RANDOM_SEED = 42
 
-VALIDATION_SIZE = 0.15
+DIGITAL_TEST_SIZE = 0.15
 
 CLASS_NAMES = {
     0: "C",
@@ -51,32 +51,26 @@ CLASS_NAMES = {
 
 
 # ============================================================
-# CARICAMENTO
+# CARICAMENTO DATASET DIGITALE
 # ============================================================
 
-def load_dataset(
-    directory: Path,
-    name: str,
-) -> tuple[np.ndarray, np.ndarray]:
+def load_digital():
+    X = np.load(DIGITAL_DIR / "X.npy")
+    y = np.load(DIGITAL_DIR / "y.npy")
 
-    X = np.load(directory / "X.npy")
-    y = np.load(directory / "y.npy")
-
-    print(f"{name}:")
+    print("DIGITAL:")
     print(f"  X: {X.shape}")
     print(f"  y: {y.shape}")
+    print()
 
     return X, y
 
 
-def load_emnist() -> tuple[
-    np.ndarray,
-    np.ndarray,
-    np.ndarray,
-    np.ndarray,
-    np.ndarray,
-    np.ndarray,
-]:
+# ============================================================
+# CARICAMENTO EMNIST
+# ============================================================
+
+def load_emnist():
 
     X_train = np.load(
         EMNIST_DIR / "X_train.npy"
@@ -126,10 +120,10 @@ def load_emnist() -> tuple[
 # ============================================================
 
 def validate_dataset(
-    X: np.ndarray,
-    y: np.ndarray,
-    name: str,
-) -> None:
+    X,
+    y,
+    name,
+):
 
     if X.ndim != 2:
         raise ValueError(
@@ -160,9 +154,9 @@ def validate_dataset(
 # ============================================================
 
 def print_class_distribution(
-    labels: np.ndarray,
-    name: str,
-) -> None:
+    labels,
+    name,
+):
 
     print(f"Distribuzione {name}:")
 
@@ -181,10 +175,10 @@ def print_class_distribution(
 
 
 # ============================================================
-# MAIN
+# COMBINAZIONE DATASET
 # ============================================================
 
-def combine_datasets() -> None:
+def combine_datasets():
 
     print("========================================")
     print("UNIONE DATASET")
@@ -208,12 +202,7 @@ def combine_datasets() -> None:
     # CARICAMENTO DIGITALE
     # --------------------------------------------------------
 
-    X_digital, y_digital = load_dataset(
-        DIGITAL_DIR,
-        "DIGITAL",
-    )
-
-    print()
+    X_digital, y_digital = load_digital()
 
     # --------------------------------------------------------
     # CONTROLLO FORMATI
@@ -244,51 +233,80 @@ def combine_datasets() -> None:
     )
 
     # --------------------------------------------------------
-    # UNIONE TRAIN
+    # DIVISIONE DIGITAL TRAIN / TEST
     # --------------------------------------------------------
 
-    print("Unione EMNIST train + DIGITAL...")
+    print("Divisione DIGITAL train/test...")
 
-    X_train_full = np.concatenate(
-        [
-            X_emnist_train,
-            X_digital,
-        ],
-        axis=0,
-    )
-
-    y_train_full = np.concatenate(
-        [
-            y_emnist_train,
-            y_digital,
-        ],
-        axis=0,
+    (
+        X_digital_train,
+        X_digital_test,
+        y_digital_train,
+        y_digital_test,
+    ) = train_test_split(
+        X_digital,
+        y_digital,
+        test_size=DIGITAL_TEST_SIZE,
+        random_state=RANDOM_SEED,
+        stratify=y_digital,
     )
 
     print(
-        f"Dataset unito: {X_train_full.shape}"
+        f"DIGITAL train: {X_digital_train.shape}"
+    )
+
+    print(
+        f"DIGITAL test:  {X_digital_test.shape}"
     )
 
     print()
 
     # --------------------------------------------------------
-    # NUOVA DIVISIONE TRAIN / VALIDATION
+    # UNIONE EMNIST TRAIN + DIGITAL TRAIN
     # --------------------------------------------------------
 
-    print("Creazione train/validation...")
-
-    X_train, X_val, y_train, y_val = (
-        train_test_split(
-            X_train_full,
-            y_train_full,
-            test_size=VALIDATION_SIZE,
-            random_state=RANDOM_SEED,
-            stratify=y_train_full,
-        )
+    print(
+        "Unione EMNIST train + DIGITAL train..."
     )
 
+    X_train = np.concatenate(
+        [
+            X_emnist_train,
+            X_digital_train,
+        ],
+        axis=0,
+    )
+
+    y_train = np.concatenate(
+        [
+            y_emnist_train,
+            y_digital_train,
+        ],
+        axis=0,
+    )
+
+    print(
+        f"Dataset TRAIN: {X_train.shape}"
+    )
+
+    print()
+
     # --------------------------------------------------------
-    # SHUFFLE
+    # VALIDATION
+    # --------------------------------------------------------
+
+    X_val = X_emnist_val
+    y_val = y_emnist_val
+
+    # --------------------------------------------------------
+    # TEST EMNIST
+    # --------------------------------------------------------
+
+    X_test_emnist = X_emnist_test
+    y_test_emnist = y_emnist_test
+
+    # --------------------------------------------------------
+    # SHUFFLE TRAIN
     # --------------------------------------------------------
 
     rng = np.random.default_rng(
@@ -303,25 +321,9 @@ def combine_datasets() -> None:
     y_train = y_train[permutation]
 
     # --------------------------------------------------------
-    # TEST
-    # --------------------------------------------------------
-    #
-    # Manteniamo il test EMNIST separato.
-    #
-    # Questo permette di misurare le prestazioni
-    # del classificatore su dati EMNIST mai utilizzati
-    # durante il training.
-    #
+    # DISTRIBUZIONE CLASSI
     # --------------------------------------------------------
 
-    X_test = X_emnist_test
-    y_test = y_emnist_test
-
-    # --------------------------------------------------------
-    # DISTRIBUZIONE
-    # --------------------------------------------------------
-
-    print()
     print_class_distribution(
         y_train,
         "TRAIN",
@@ -333,18 +335,27 @@ def combine_datasets() -> None:
     )
 
     print_class_distribution(
-        y_test,
+        y_test_emnist,
         "TEST EMNIST",
     )
 
+    print_class_distribution(
+        y_digital_test,
+        "TEST DIGITAL",
+    )
+
     # --------------------------------------------------------
-    # SALVATAGGIO
+    # CREAZIONE CARTELLA
     # --------------------------------------------------------
 
     COMBINED_DIR.mkdir(
         parents=True,
         exist_ok=True,
     )
+
+    # --------------------------------------------------------
+    # SALVATAGGIO TRAIN
+    # --------------------------------------------------------
 
     np.save(
         COMBINED_DIR / "X_train.npy",
@@ -356,6 +367,10 @@ def combine_datasets() -> None:
         y_train,
     )
 
+    # --------------------------------------------------------
+    # SALVATAGGIO VALIDATION
+    # --------------------------------------------------------
+
     np.save(
         COMBINED_DIR / "X_val.npy",
         X_val,
@@ -366,14 +381,32 @@ def combine_datasets() -> None:
         y_val,
     )
 
+    # --------------------------------------------------------
+    # SALVATAGGIO TEST EMNIST
+    # --------------------------------------------------------
+
     np.save(
-        COMBINED_DIR / "X_test.npy",
-        X_test,
+        COMBINED_DIR / "X_test_emnist.npy",
+        X_test_emnist,
     )
 
     np.save(
-        COMBINED_DIR / "y_test.npy",
-        y_test,
+        COMBINED_DIR / "y_test_emnist.npy",
+        y_test_emnist,
+    )
+
+    # --------------------------------------------------------
+    # SALVATAGGIO TEST DIGITAL
+    # --------------------------------------------------------
+
+    np.save(
+        COMBINED_DIR / "X_test_digital.npy",
+        X_digital_test,
+    )
+
+    np.save(
+        COMBINED_DIR / "y_test_digital.npy",
+        y_digital_test,
     )
 
     # --------------------------------------------------------
@@ -385,22 +418,35 @@ def combine_datasets() -> None:
     print("========================================")
     print()
 
-    print(f"X_train: {X_train.shape}")
-    print(f"y_train: {y_train.shape}")
+    print(f"X_train:        {X_train.shape}")
+    print(f"y_train:        {y_train.shape}")
 
-    print(f"X_val:   {X_val.shape}")
-    print(f"y_val:   {y_val.shape}")
+    print(f"X_val:          {X_val.shape}")
+    print(f"y_val:          {y_val.shape}")
 
-    print(f"X_test:  {X_test.shape}")
-    print(f"y_test:  {y_test.shape}")
+    print(
+        f"X_test_emnist:  {X_test_emnist.shape}"
+    )
+
+    print(
+        f"y_test_emnist:  {y_test_emnist.shape}"
+    )
+
+    print(
+        f"X_test_digital: {X_digital_test.shape}"
+    )
+
+    print(
+        f"y_test_digital: {y_digital_test.shape}"
+    )
 
     print()
-    print(f"Salvato in:")
+    print("Salvato in:")
     print(COMBINED_DIR)
 
 
 # ============================================================
-# MAIN
+# ENTRY POINT
 # ============================================================
 
 if __name__ == "__main__":

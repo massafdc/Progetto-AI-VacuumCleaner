@@ -47,29 +47,53 @@ CLASS_NAMES = {
 
 
 # ============================================================
-# CARICAMENTO
+# CARICAMENTO DATASET
 # ============================================================
 
-def load_test_dataset():
+def load_test_dataset(dataset_name):
     """
-    Carica il test set EMNIST.
+    Carica uno dei due test set:
+    - EMNIST
+    - DIGITAL
     """
 
-    X_test = np.load(
-        DATA_DIR / "X_test.npy"
-    )
+    if dataset_name == "EMNIST":
 
-    y_test = np.load(
-        DATA_DIR / "y_test.npy"
-    )
+        X_test = np.load(
+            DATA_DIR / "X_test_emnist.npy"
+        )
 
-    print("Test dataset caricato:")
+        y_test = np.load(
+            DATA_DIR / "y_test_emnist.npy"
+        )
+
+    elif dataset_name == "DIGITAL":
+
+        X_test = np.load(
+            DATA_DIR / "X_test_digital.npy"
+        )
+
+        y_test = np.load(
+            DATA_DIR / "y_test_digital.npy"
+        )
+
+    else:
+
+        raise ValueError(
+            f"Dataset non riconosciuto: {dataset_name}"
+        )
+
+    print(f"Test dataset {dataset_name} caricato:")
     print(f"  X_test: {X_test.shape}")
     print(f"  y_test: {y_test.shape}")
     print()
 
     return X_test, y_test
 
+
+# ============================================================
+# CARICAMENTO MODELLO
+# ============================================================
 
 def load_model():
     """
@@ -138,7 +162,7 @@ def evaluate_accuracy(
     print("=" * 60)
 
     print(
-        f"Accuracy test: {accuracy:.4f}"
+        f"Accuracy: {accuracy:.4f}"
     )
 
     print(
@@ -277,11 +301,12 @@ def evaluate_errors_per_class(
 
 
 # ============================================================
-# CONFUSION MATRIX GRAPHICA
+# CONFUSION MATRIX GRAFICA
 # ============================================================
 
 def plot_confusion_matrix(
     matrix: np.ndarray,
+    dataset_name: str,
 ) -> None:
     """
     Mostra graficamente la confusion matrix.
@@ -300,7 +325,7 @@ def plot_confusion_matrix(
     )
 
     plt.title(
-        "Confusion Matrix - EMNIST Test"
+        f"Confusion Matrix - {dataset_name} Test"
     )
 
     plt.xlabel(
@@ -317,13 +342,20 @@ def plot_confusion_matrix(
 
 
 # ============================================================
-# MAIN
+# VALUTAZIONE DATASET
 # ============================================================
 
-def main():
+def evaluate_dataset(
+    model,
+    dataset_name: str,
+) -> None:
+    """
+    Esegue tutta la valutazione su un test set.
+    """
 
+    print()
     print("=" * 60)
-    print("VALUTAZIONE CLASSIFICATORE")
+    print(f"VALUTAZIONE {dataset_name}")
     print("=" * 60)
     print()
 
@@ -332,10 +364,10 @@ def main():
     # --------------------------------------------------------
 
     X_test, y_test = (
-        load_test_dataset()
+        load_test_dataset(
+            dataset_name
+        )
     )
-
-    model = load_model()
 
     # --------------------------------------------------------
     # PREDIZIONI
@@ -387,7 +419,44 @@ def main():
     # --------------------------------------------------------
 
     plot_confusion_matrix(
-        matrix
+        matrix,
+        dataset_name,
+    )
+
+
+# ============================================================
+# MAIN
+# ============================================================
+
+def main():
+
+    print("=" * 60)
+    print("VALUTAZIONE CLASSIFICATORE")
+    print("=" * 60)
+    print()
+
+    # --------------------------------------------------------
+    # CARICAMENTO MODELLO
+    # --------------------------------------------------------
+
+    model = load_model()
+
+    # --------------------------------------------------------
+    # VALUTAZIONE EMNIST
+    # --------------------------------------------------------
+
+    evaluate_dataset(
+        model,
+        "EMNIST",
+    )
+
+    # --------------------------------------------------------
+    # VALUTAZIONE DIGITAL
+    # --------------------------------------------------------
+
+    evaluate_dataset(
+        model,
+        "DIGITAL",
     )
 
 

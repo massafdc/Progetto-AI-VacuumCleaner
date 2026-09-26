@@ -66,21 +66,56 @@ def load_dataset():
         DATA_DIR / "y_val.npy"
     )
 
-    X_test = np.load(
-        DATA_DIR / "X_test.npy"
+    X_test_emnist = np.load(
+        DATA_DIR / "X_test_emnist.npy"
     )
 
-    y_test = np.load(
-        DATA_DIR / "y_test.npy"
+    y_test_emnist = np.load(
+        DATA_DIR / "y_test_emnist.npy"
+    )
+
+    X_test_digital = np.load(
+        DATA_DIR / "X_test_digital.npy"
+    )
+
+    y_test_digital = np.load(
+        DATA_DIR / "y_test_digital.npy"
     )
 
     print("Dataset caricato:")
-    print(f"  X_train: {X_train.shape}")
-    print(f"  y_train: {y_train.shape}")
-    print(f"  X_val:   {X_val.shape}")
-    print(f"  y_val:   {y_val.shape}")
-    print(f"  X_test:  {X_test.shape}")
-    print(f"  y_test:  {y_test.shape}")
+
+    print(
+        f"  X_train:        {X_train.shape}"
+    )
+
+    print(
+        f"  y_train:        {y_train.shape}"
+    )
+
+    print(
+        f"  X_val:          {X_val.shape}"
+    )
+
+    print(
+        f"  y_val:          {y_val.shape}"
+    )
+
+    print(
+        f"  X_test_emnist:  {X_test_emnist.shape}"
+    )
+
+    print(
+        f"  y_test_emnist:  {y_test_emnist.shape}"
+    )
+
+    print(
+        f"  X_test_digital: {X_test_digital.shape}"
+    )
+
+    print(
+        f"  y_test_digital: {y_test_digital.shape}"
+    )
+
     print()
 
     return (
@@ -88,8 +123,10 @@ def load_dataset():
         y_train,
         X_val,
         y_val,
-        X_test,
-        y_test,
+        X_test_emnist,
+        y_test_emnist,
+        X_test_digital,
+        y_test_digital,
     )
 
 
@@ -232,8 +269,10 @@ def main():
         y_train,
         X_val,
         y_val,
-        X_test,
-        y_test,
+        X_test_emnist,
+        y_test_emnist,
+        X_test_digital,
+        y_test_digital,
     ) = load_dataset()
 
     # --------------------------------------------------------
@@ -264,14 +303,25 @@ def main():
     )
 
     # --------------------------------------------------------
-    # TEST
+    # TEST EMNIST
     # --------------------------------------------------------
 
     evaluate_model(
         model,
-        X_test,
-        y_test,
+        X_test_emnist,
+        y_test_emnist,
         "TEST EMNIST",
+    )
+
+    # --------------------------------------------------------
+    # TEST DIGITAL
+    # --------------------------------------------------------
+
+    evaluate_model(
+        model,
+        X_test_digital,
+        y_test_digital,
+        "TEST DIGITAL",
     )
 
     # --------------------------------------------------------

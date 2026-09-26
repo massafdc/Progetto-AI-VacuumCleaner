@@ -100,7 +100,7 @@ def preprocess_image(image):
     )
 
     # --------------------------------------------------------
-    # 2. Maschera binaria per trovare la X
+    # 2. Maschera binaria per trovare la lettera
     # --------------------------------------------------------
 
     blurred = cv2.GaussianBlur(
@@ -129,7 +129,7 @@ def preprocess_image(image):
         iterations=1
     )
 
-    # Chiude eventuali piccoli buchi nella X
+    # Chiude eventuali piccoli buchi nella lettera
     mask = cv2.morphologyEx(
         mask,
         cv2.MORPH_CLOSE,
@@ -291,7 +291,7 @@ def show_results(
     axes[1].axis("off")
 
     # --------------------------------------------------------
-    # Maschera usata per trovare la X
+    # Maschera usata per trovare la lettera
     # --------------------------------------------------------
 
     axes[2].imshow(mask, cmap="gray")
