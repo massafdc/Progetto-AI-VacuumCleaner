@@ -140,7 +140,7 @@ def create_model() -> MLPClassifier:
     """
 
     model = MLPClassifier(
-        hidden_layer_sizes=(256, 128),
+        hidden_layer_sizes=(256, 128, 64, 32),
         activation="relu",
         solver="adam",
         batch_size=256,
