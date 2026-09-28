@@ -1,70 +1,230 @@
 import time
+import multiprocessing
+
 from aima.search import breadth_first_graph_search, astar_search
 from src.smart_vacuum import SmartVacuum
 
 
-def run_search(name, search_fn, problem, **kwargs):
-    start_time = time.perf_counter()
-    node = search_fn(problem, **kwargs)
-    elapsed = time.perf_counter() - start_time
+# ============================================================
+# CONFIGURAZIONE
+# ============================================================
 
-    print(f"--- {name} ---")
-    print(f"Nodi espansi: {problem.nodes_expanded}")
-    print(f"Tempo: {elapsed:.4f} s")
-    if node:
-        print(f"Lunghezza soluzione: {len(node.solution())}")
-    else:
-        print("Nessuna soluzione trovata.")
-    print()
+SEARCH_TIMEOUT = 20.0
 
 
-def compare_heuristics(grid, start, goal):
-    """Confronta A* usando le due euristiche di SmartVacuum."""
-    results = []
+# ============================================================
+# PROBLEMA
+# ============================================================
 
-    for name, heuristic_name in (("A* con h", "h"), ("A* con h2", "h2")):
-        problem = SmartVacuum(grid, start, goal)
-        heuristic = getattr(problem, heuristic_name)
+grid = [
+    ["C", "C", "X", "C"],
+    ["V", "V", "C", "C"],
+    ["D", "V", "V", "D"],
+    ["D", "D", "X", "C"],
+]
+
+start = (0, 0)
+goal = (3, 3)
+
+
+# ============================================================
+# WORKER
+# ============================================================
+
+def search_worker(search_function, problem, kwargs, connection):
+
+    try:
 
         start_time = time.perf_counter()
-        node = astar_search(problem, h=heuristic)
+
+        node = search_function(
+            problem,
+            **kwargs
+        )
+
         elapsed = time.perf_counter() - start_time
 
-        result = {
-            "name": name,
-            "node": node,
-            "nodes_expanded": problem.nodes_expanded,
-            "time": elapsed,
-            "cost": node.path_cost if node else None,
-        }
-        results.append(result)
+        if node is not None:
 
-        print(f"--- {name} ---")
-        print(f"Nodi espansi: {result['nodes_expanded']}")
-        print(f"Tempo: {result['time']:.4f} s")
-        print(f"Costo: {result['cost']}")
-        print()
+            connection.send({
+                "success": True,
+                "time": elapsed,
+                "nodes": problem.nodes_expanded,
+                "cost": node.path_cost,
+                "length": len(node.solution())
+            })
 
-    if all(result["node"] for result in results):
-        assert results[0]["cost"] == results[1]["cost"]
+        else:
 
-    return results
+            connection.send({
+                "success": True,
+                "time": elapsed,
+                "nodes": problem.nodes_expanded,
+                "cost": None,
+                "length": None
+            })
+
+    except Exception as e:
+
+        connection.send({
+            "success": False,
+            "error": str(e)
+        })
+
+    finally:
+
+        connection.close()
+
+
+# ============================================================
+# RICERCA CON TIMEOUT
+# ============================================================
+
+def run_search(
+    name,
+    search_function,
+    problem,
+    **kwargs
+):
+
+    print(f"\n{name}")
+    print("-" * 30)
+
+    parent, child = multiprocessing.Pipe()
+
+    process = multiprocessing.Process(
+        target=search_worker,
+        args=(
+            search_function,
+            problem,
+            kwargs,
+            child
+        )
+    )
+
+    start_time = time.perf_counter()
+
+    process.start()
+
+    # Attende al massimo SEARCH_TIMEOUT secondi
+    process.join(SEARCH_TIMEOUT)
+
+    # --------------------------------------------------------
+    # TIMEOUT
+    # --------------------------------------------------------
+
+    if process.is_alive():
+
+        process.terminate()
+        process.join()
+
+        elapsed = time.perf_counter() - start_time
+
+        print("TIMEOUT")
+        print(f"Tempo: {elapsed:.6f} s")
+
+        parent.close()
+
+        return
+
+    # --------------------------------------------------------
+    # RICERCA TERMINATA
+    # --------------------------------------------------------
+
+    elapsed = time.perf_counter() - start_time
+
+    if parent.poll():
+
+        result = parent.recv()
+
+    else:
+
+        print("Errore: nessun risultato ricevuto.")
+        parent.close()
+        return
+
+    parent.close()
+
+    if not result["success"]:
+
+        print(f"Errore: {result['error']}")
+        return
+
+    print(f"Tempo:          {elapsed:.6f} s")
+    print(f"Nodi espansi:   {result['nodes']}")
+    print(f"Costo:          {result['cost']}")
+    print(f"Lunghezza:      {result['length']}")
+
+
+# ============================================================
+# MAIN
+# ============================================================
+
+def main():
+
+    print("=== GRIGLIA ===\n")
+
+    for row in grid:
+        print(" ".join(row))
+
+    print(f"\nStart: {start}")
+    print(f"Goal:  {goal}")
+
+    print(f"\nTimeout per algoritmo: {SEARCH_TIMEOUT} s")
+
+    # --------------------------------------------------------
+    # BFS
+    # --------------------------------------------------------
+
+    problem_bfs = SmartVacuum(
+        grid,
+        start,
+        goal
+    )
+
+    run_search(
+        "BFS",
+        breadth_first_graph_search,
+        problem_bfs
+    )
+
+    # --------------------------------------------------------
+    # A* con h
+    # --------------------------------------------------------
+
+    problem_h = SmartVacuum(
+        grid,
+        start,
+        goal
+    )
+
+    run_search(
+        "A* con h",
+        astar_search,
+        problem_h,
+        h=problem_h.h
+    )
+
+    # --------------------------------------------------------
+    # A* con h2
+    # --------------------------------------------------------
+
+    problem_h2 = SmartVacuum(
+        grid,
+        start,
+        goal
+    )
+
+    run_search(
+        "A* con h2",
+        astar_search,
+        problem_h2,
+        h=problem_h2.h2
+    )
 
 
 if __name__ == "__main__":
-    grid = [
-        ["C", "D", "C"],
-        ["X", "V", "C"],
-        ["C", "D", "C"]
-    ]
-    start = (0, 0)
-    goal = (2, 2)
 
-    problem_bfs = SmartVacuum(grid, start, goal)
-    run_search("BFS (non informata)", breadth_first_graph_search, problem_bfs)
+    multiprocessing.freeze_support()
 
-    problem_astar = SmartVacuum(grid, start, goal)
-    run_search("A* (informata, h)", astar_search, problem_astar, h=problem_astar.h)
-
-    print("=== CONFRONTO TRA LE DUE EURISTICHE ===")
-    compare_heuristics(grid, start, goal)
+    main()
