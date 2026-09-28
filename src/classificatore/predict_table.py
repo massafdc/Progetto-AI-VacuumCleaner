@@ -23,7 +23,7 @@ CELLS_DIR = BASE_DIR / "cells"
 # Tempo massimo concesso a ciascun algoritmo di ricerca.
 # Può essere modificato facilmente.
 
-SEARCH_TIMEOUT = 20.0
+SEARCH_TIMEOUT = 120.0
 
 
 # ============================================================

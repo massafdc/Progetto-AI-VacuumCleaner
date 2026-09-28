@@ -15,10 +15,10 @@ DATA_DIR = BASE_DIR / "data" / "combined" / "processed"
 IMAGE_SIZE = 28
 
 # Numero di immagini visualizzate
-NUM_IMAGES = 50
+NUM_IMAGES = 24
 
 # Numero di immagini per riga
-COLUMNS = 10
+COLUMNS = 6
 
 CLASS_NAMES = {
     0: "C",

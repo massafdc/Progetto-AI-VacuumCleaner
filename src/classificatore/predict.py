@@ -1,6 +1,7 @@
-from pathlib import Path
 
+from pathlib import Path
 import sys
+
 import cv2
 import joblib
 import numpy as np
@@ -27,20 +28,17 @@ CLASS_NAMES = {
 
 
 # ============================================================
-# TROVA LA PRIMA IMMAGINE
+# TROVA IMMAGINE
 # ============================================================
 
 def find_image(filename=None):
+
     if filename:
-        # Se è stato fornito un percorso completo/relativo
-        # e il file esiste, usalo direttamente.
         image_path = Path(filename)
 
         if image_path.exists():
             return image_path.resolve()
 
-        # Altrimenti considera filename come nome di un'immagine
-        # dentro tests/immagini_lettere
         image_path = IMAGE_DIR / filename
 
         if image_path.exists():
@@ -71,86 +69,38 @@ def find_image(filename=None):
 
 def preprocess_image(image):
     """
-    Restituisce:
+    Prepara una lettera nera su sfondo bianco
+    per il classificatore EMNIST.
 
-    - processed: immagine 28x28 grayscale pronta per il modello
-    - mask: maschera binaria usata per trovare la lettera
-    - bbox: bounding box trovata
+    Restituisce:
+        processed: immagine 28x28 normalizzata
+        mask: maschera binaria
+        bbox: bounding box della lettera
     """
 
     # --------------------------------------------------------
-    # 1. Correzione dell'illuminazione
+    # 1. Trova la lettera
     # --------------------------------------------------------
 
-    # Sfocatura molto grande = stima dello sfondo/illuminazione
-    background = cv2.GaussianBlur(
-        image,
-        (0, 0),
-        sigmaX=25
-    )
-
-    # Evita divisioni per zero
-    background = np.maximum(background, 1)
-
-    # Normalizzazione dell'illuminazione
-    normalized = cv2.divide(
-        image,
-        background,
-        scale=255
-    )
-
-    # --------------------------------------------------------
-    # 2. Maschera binaria per trovare la lettera
-    # --------------------------------------------------------
-
-    blurred = cv2.GaussianBlur(
-        normalized,
-        (5, 5),
-        0
-    )
-
+    # La lettera è nera, quindi i pixel con valore basso
+    # appartengono alla lettera.
     _, mask = cv2.threshold(
-        blurred,
-        0,
+        image,
+        200,
         255,
-        cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+        cv2.THRESH_BINARY_INV
     )
 
     # --------------------------------------------------------
-    # 3. Elimina piccoli rumori
-    # --------------------------------------------------------
-
-    kernel = np.ones((3, 3), np.uint8)
-
-    mask = cv2.morphologyEx(
-        mask,
-        cv2.MORPH_OPEN,
-        kernel,
-        iterations=1
-    )
-
-    # Chiude eventuali piccoli buchi nella lettera
-    mask = cv2.morphologyEx(
-        mask,
-        cv2.MORPH_CLOSE,
-        kernel,
-        iterations=2
-    )
-
-    # --------------------------------------------------------
-    # 4. Trova i pixel appartenenti alla lettera
+    # 2. Trova la bounding box
     # --------------------------------------------------------
 
     ys, xs = np.where(mask > 0)
 
     if len(xs) == 0:
         raise ValueError(
-            "Non è stato possibile trovare la lettera nell'immagine."
+            "Non è stato possibile trovare la lettera."
         )
-
-    # --------------------------------------------------------
-    # 5. Bounding box
-    # --------------------------------------------------------
 
     x_min = xs.min()
     x_max = xs.max()
@@ -160,7 +110,10 @@ def preprocess_image(image):
     w = x_max - x_min + 1
     h = y_max - y_min + 1
 
-    # Margine attorno alla lettera
+    # --------------------------------------------------------
+    # 3. Aggiungi un margine
+    # --------------------------------------------------------
+
     margin = int(max(w, h) * 0.30)
 
     x1 = max(0, x_min - margin)
@@ -170,13 +123,13 @@ def preprocess_image(image):
     y2 = min(image.shape[0], y_max + margin + 1)
 
     # --------------------------------------------------------
-    # 6. Crop dell'immagine originale NORMALIZZATA
+    # 4. Ritaglia la lettera
     # --------------------------------------------------------
 
-    cropped = normalized[y1:y2, x1:x2]
+    cropped = image[y1:y2, x1:x2]
 
     # --------------------------------------------------------
-    # 7. Rendi il crop quadrato
+    # 5. Rendi il ritaglio quadrato
     # --------------------------------------------------------
 
     crop_h, crop_w = cropped.shape
@@ -198,7 +151,7 @@ def preprocess_image(image):
     ] = cropped
 
     # --------------------------------------------------------
-    # 8. Resize a 28x28
+    # 6. Ridimensiona a 28x28
     # --------------------------------------------------------
 
     resized = cv2.resize(
@@ -208,42 +161,27 @@ def preprocess_image(image):
     )
 
     # --------------------------------------------------------
-    # 9. Inversione:
+    # 7. Inverti i colori
     #
-    # foto originale:
-    # nero = lettera
-    # bianco = sfondo
+    # Immagine originale:
+    #   nero  = lettera
+    #   bianco = sfondo
     #
-    # dataset:
-    # bianco = lettera
-    # nero = sfondo
+    # EMNIST:
+    #   bianco = lettera
+    #   nero = sfondo
     # --------------------------------------------------------
 
     processed = 255 - resized
 
-    # Normalizzazione 0-1
+    # --------------------------------------------------------
+    # 8. Normalizza
+    # --------------------------------------------------------
+
     processed = processed.astype(np.float32) / 255.0
 
-    return processed, mask, (x1, y1, x2, y2), normalized
+    return processed, mask, (x1, y1, x2, y2)
 
-
-def predict_image(image_path, model):
-    image = cv2.imread(str(image_path), cv2.IMREAD_GRAYSCALE)
-
-    if image is None:
-        raise ValueError(f"Impossibile leggere l'immagine: {image_path}")
-
-    processed, _, _, _ = preprocess_image(image)
-
-    X = processed.reshape(1, -1)
-
-    probabilities = model.predict_proba(X)[0]
-    predicted_class = model.predict(X)[0]
-
-    letter = CLASS_NAMES[predicted_class]
-    confidence = probabilities[predicted_class]
-
-    return letter, confidence
 
 # ============================================================
 # VISUALIZZAZIONE
@@ -251,7 +189,6 @@ def predict_image(image_path, model):
 
 def show_results(
     original,
-    normalized,
     mask,
     processed,
     bbox,
@@ -261,13 +198,20 @@ def show_results(
 
     x1, y1, x2, y2 = bbox
 
-    fig, axes = plt.subplots(1, 4, figsize=(16, 4))
+    fig, axes = plt.subplots(
+        1,
+        3,
+        figsize=(12, 4)
+    )
 
     # --------------------------------------------------------
     # Immagine originale + bounding box
     # --------------------------------------------------------
 
-    axes[0].imshow(original, cmap="gray")
+    axes[0].imshow(
+        original,
+        cmap="gray"
+    )
 
     rect = plt.Rectangle(
         (x1, y1),
@@ -279,57 +223,49 @@ def show_results(
 
     axes[0].add_patch(rect)
 
-    axes[0].set_title("Originale + bounding box")
+    axes[0].set_title("Originale")
     axes[0].axis("off")
 
     # --------------------------------------------------------
-    # Immagine dopo correzione illuminazione
+    # Maschera
     # --------------------------------------------------------
 
-    axes[1].imshow(normalized, cmap="gray")
-    axes[1].set_title("Illuminazione corretta")
+    axes[1].imshow(
+        mask,
+        cmap="gray"
+    )
+
+    axes[1].set_title("Maschera")
     axes[1].axis("off")
 
     # --------------------------------------------------------
-    # Maschera usata per trovare la lettera
+    # Input finale del modello
     # --------------------------------------------------------
 
-    axes[2].imshow(mask, cmap="gray")
-    axes[2].set_title("Maschera binaria")
-    axes[2].axis("off")
-
-    # --------------------------------------------------------
-    # Immagine finale 28x28
-    # --------------------------------------------------------
-
-    axes[3].imshow(
-        processed.reshape(28, 28),
+    axes[2].imshow(
+        processed,
         cmap="gray",
         vmin=0,
         vmax=1
     )
 
-    axes[3].set_title(
+    axes[2].set_title(
         f"Input modello → {prediction}"
     )
 
-    axes[3].axis("off")
+    axes[2].axis("off")
 
     plt.tight_layout()
     plt.show()
 
     # --------------------------------------------------------
-    # Statistiche
+    # Probabilità
     # --------------------------------------------------------
-    '''
-    print("\nStatistiche immagine finale:")
-    print(f"min:  {processed.min():.4f}")
-    print(f"max:  {processed.max():.4f}")
-    print(f"mean: {processed.mean():.4f}")
-    '''
-    
+
     print("\nProbabilità:")
+
     for class_id, probability in enumerate(probabilities):
+
         print(
             f"{CLASS_NAMES[class_id]}: "
             f"{probability * 100:.2f}%"
@@ -346,10 +282,17 @@ def main():
 
     model = joblib.load(MODEL_PATH)
 
-    filename = sys.argv[1] if len(sys.argv) > 1 else None
+    filename = (
+        sys.argv[1]
+        if len(sys.argv) > 1
+        else None
+    )
+
     image_path = find_image(filename)
 
-    print(f"Immagine utilizzata: {image_path}")
+    print(
+        f"Immagine utilizzata: {image_path}"
+    )
 
     # --------------------------------------------------------
     # Carica immagine
@@ -374,7 +317,7 @@ def main():
     # Preprocessing
     # --------------------------------------------------------
 
-    processed, mask, bbox, normalized = preprocess_image(
+    processed, mask, bbox = preprocess_image(
         image
     )
 
@@ -390,11 +333,12 @@ def main():
 
     prediction = CLASS_NAMES[predicted_class]
 
+    confidence = probabilities[predicted_class]
+
     print("\n--------------------------------")
     print(f"Predizione: {prediction}")
     print(
-        f"Confidenza: "
-        f"{probabilities[predicted_class] * 100:.2f}%"
+        f"Confidenza: {confidence * 100:.2f}%"
     )
     print("--------------------------------")
 
@@ -404,13 +348,40 @@ def main():
 
     show_results(
         image,
-        normalized,
         mask,
         processed,
         bbox,
         prediction,
         probabilities
     )
+
+
+
+def predict_image(image_path, model):
+
+    image = cv2.imread(
+        str(image_path),
+        cv2.IMREAD_GRAYSCALE
+    )
+
+    if image is None:
+        raise ValueError(
+            f"Impossibile leggere l'immagine: {image_path}"
+        )
+
+    processed, _, _ = preprocess_image(image)
+
+    X = processed.reshape(1, 784)
+
+    probabilities = model.predict_proba(X)[0]
+
+    predicted_class = model.predict(X)[0]
+
+    letter = CLASS_NAMES[predicted_class]
+
+    confidence = probabilities[predicted_class]
+
+    return letter, confidence
 
 
 if __name__ == "__main__":
