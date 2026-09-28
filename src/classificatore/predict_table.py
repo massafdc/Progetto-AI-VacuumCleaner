@@ -1,10 +1,10 @@
 from pathlib import Path
-import shutil
-import sys
+import shutil   #elimina la cartella cells se esiste già
+import sys      #argomenti da terminale
 import time
-import multiprocessing
+import multiprocessing    #esegue algoritmi di ricerca in processi separati
 
-import joblib
+import joblib   #libreria per salvare e caricare modelli di machine learning
 
 from aima.search import breadth_first_graph_search, astar_search
 from .predict import predict_image, MODEL_PATH
@@ -308,7 +308,7 @@ def run_search(
         f"Timeout: {timeout:.2f} s"
     )
 
-    parent_connection, child_connection = (
+    parent_connection, child_connection = (    #avvio del processo di ricerca in un processo separato
         multiprocessing.Pipe()
     )
 

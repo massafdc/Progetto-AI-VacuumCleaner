@@ -1,8 +1,8 @@
 
 import cv2
 import numpy as np
-import os
-import sys
+import os    #crea la cartella di output e cancella i file precedenti
+import sys   #py  legge gli argomenti passati da terminale
 
 
 # ============================================================
@@ -101,7 +101,7 @@ def detect_grid_lines(image):
     h, w = binary.shape
 
     horizontal_length = max(    #inizializzazione stampino
-        15,                     #Calcola un ventesimo della larghezza
+        15,                     #Calcola la larghezza del kernel, imposta anche un minimo di 15 pixel
         w // 20
     )
 
