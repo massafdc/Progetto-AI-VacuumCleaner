@@ -12,7 +12,7 @@ import sys
 OUTPUT_DIR = "cells_test_1"
 
 # Percentuale della cella da eliminare lungo i bordi.
-CELL_MARGIN = 0.08
+CELL_MARGIN = 0.08     #8% e lo riusa per togliere i bordi neri o le linee della griglia dalle celle estratte
 
 
 # ============================================================
@@ -100,29 +100,30 @@ def detect_grid_lines(image):
 
     h, w = binary.shape
 
-    horizontal_length = max(
-        15,
+    horizontal_length = max(    #inizializzazione stampino
+        15,                     #Calcola un ventesimo della larghezza
         w // 20
     )
 
     vertical_length = max(
-        15,
+        15,                     #Calcola un ventesimo dell'altezza
         h // 20
     )
 
     horizontal_kernel = cv2.getStructuringElement(
-        cv2.MORPH_RECT,
+        cv2.MORPH_RECT,                               #crea un kernel rettangolare per rilevare le linee orizzontali
         (horizontal_length, 1)
     )
 
     vertical_kernel = cv2.getStructuringElement(
-        cv2.MORPH_RECT,
+        cv2.MORPH_RECT,                               #crea un kernel rettangolare per rilevare le linee verticali
+
         (1, vertical_length)
     )
 
     horizontal = cv2.morphologyEx(
         binary,
-        cv2.MORPH_OPEN,
+        cv2.MORPH_OPEN,  #erosione e dilatazione per rilevare le linee orizzontali
         horizontal_kernel
     )
 
@@ -132,7 +133,7 @@ def detect_grid_lines(image):
         vertical_kernel
     )
 
-    horizontal_projection = np.sum(
+    horizontal_projection = np.sum(        #conta quanti pixel sono bianchi
         horizontal > 0,
         axis=1
     )
@@ -142,8 +143,8 @@ def detect_grid_lines(image):
         axis=0
     )
 
-    horizontal_threshold = w * 0.30
-    vertical_threshold = h * 0.30
+    horizontal_threshold = w * 0.30   #impostazione soglia per rilevare le linee orizzontali (almeno il 30% dei pixel bianchi devono essere presenti lungo la riga)
+    vertical_threshold = h * 0.30     #impostazione soglia per rilevare le linee verticali (30%pixel)
 
     horizontal_indices = np.where(
         horizontal_projection > horizontal_threshold
@@ -153,13 +154,13 @@ def detect_grid_lines(image):
         vertical_projection > vertical_threshold
     )[0]
 
-    horizontal_positions = cluster_positions(
+    horizontal_positions = cluster_positions(   #raggruppa le cordinate delle linee orizzontali molto vicine
         horizontal_indices.tolist(),
         tolerance=max(5, h // 150)
     )
 
-    vertical_positions = cluster_positions(
-        vertical_indices.tolist(),
+    vertical_positions = cluster_positions(    #raggruppa le coordinate delle linee verticali molto vicine
+        vertical_indices.tolist(),             #e fa la media per una sola coordinata
         tolerance=max(5, w // 150)
     )
 
@@ -285,24 +286,24 @@ def create_cells_preview(
 
     preview = image.copy()
 
-    rows = len(horizontal) - 1
-    cols = len(vertical) - 1
+    rows = len(horizontal) - 1    #numero di righe della griglia
+    cols = len(vertical) - 1      #numero di colonne della griglia
 
-    for row in range(rows):
+    for row in range(rows):  
 
-        for col in range(cols):
+        for col in range(cols):  #per ogni cella della griglia trova le coordinate e disegna un rettangolo blu con il numero della cella
 
             x1 = vertical[col]
             x2 = vertical[col + 1]
-
+                                        #recupera le coordinate delle celle
             y1 = horizontal[row]
             y2 = horizontal[row + 1]
 
             cv2.rectangle(
-                preview,
+                preview,                #disegna un rettangolo blu intorno alla cella 
                 (x1, y1),
                 (x2, y2),
-                (255, 0, 0),
+                (255, 0, 0),   #blu e 2pixel
                 2
             )
 
@@ -316,7 +317,7 @@ def create_cells_preview(
                 1
             )
 
-    return preview
+    return preview   #restituisce l'immagine con i rettangoli blu e i numeri delle celle
 
 
 # ============================================================
@@ -337,8 +338,8 @@ def extract_cells(
 
     h, w = image.shape[:2]
 
-    rows = len(horizontal) - 1
-    cols = len(vertical) - 1
+    rows = len(horizontal) - 1    #numero di righe della griglia come per la preview
+    cols = len(vertical) - 1      #numero di colonne della griglia come per la preview
 
     print(
         f"Griglia rilevata: {rows} x {cols}"
@@ -353,16 +354,16 @@ def extract_cells(
 
         for col in range(cols):
 
-            x1 = vertical[col]
+            x1 = vertical[col]   #prende le coordinate dei bordi della cella
             x2 = vertical[col + 1]
 
-            cell_width = x2 - x1
+            cell_width = x2 - x1      #calcola la larghezza e l'altezza della cella
             cell_height = y2 - y1
 
             margin_x = int(
-                cell_width * CELL_MARGIN
+                cell_width * CELL_MARGIN     #toglie del margine per far si che non ci siano bordi neri o linee della griglia nelle celle estratte
             )
-
+                                            #cell margin è 0.08 quindi toglie l'8% della larghezza e dell'altezza della cella (CIRCA 9 PIXEL)
             margin_y = int(
                 cell_height * CELL_MARGIN
             )
@@ -376,7 +377,7 @@ def extract_cells(
                 w,
                 x2 - margin_x
             )
-
+                                                        #CON CROP calcola i bordi del ritaglio della cella togliendo il margine
             crop_y1 = max(
                 0,
                 y1 + margin_y
@@ -388,7 +389,7 @@ def extract_cells(
             )
 
             cell = image[
-                crop_y1:crop_y2,
+                crop_y1:crop_y2,    #estrae la cella dall'immagine originale usando le coordinate calcolate con il margine
                 crop_x1:crop_x2
             ]
 
