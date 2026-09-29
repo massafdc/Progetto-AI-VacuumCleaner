@@ -142,7 +142,7 @@ def create_model() -> MLPClassifier:
     model = MLPClassifier(
         hidden_layer_sizes=(256, 128),
         activation="relu",
-        solver="adam",
+        solver="adam",   #regola i pesi per far si che ci siano sempre meno errori, ottimizzando la funzione di perdita
         batch_size=256,
         learning_rate_init=0.001,
         max_iter=30,
