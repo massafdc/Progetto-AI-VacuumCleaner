@@ -1,8 +1,8 @@
 from pathlib import Path
-import shutil
+import shutil #libreria per la gestione dei file e delle directory
 
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
+import matplotlib.patches as patches #per disegnare forme geometriche come rettangoli e cerchi
 
 
 # ============================================================
@@ -98,29 +98,29 @@ def draw_frame(grid, position, step, action_label, goal_position, start_position
     # --------------------------------------------------------
 
     robot_row, robot_col = position
-    cx = robot_col + 0.5
-    cy = size - 1 - robot_row + 0.5
+    cx = robot_col + 0.5    #centro della cella in x
+    cy = size - 1 - robot_row + 0.5  #centro della cella in y
 
-    ax.add_patch(patches.Circle(
+    ax.add_patch(patches.Circle(  #cerchio interno del robot, per evidenziare la sua posizione
         (cx, cy), 0.32,
         facecolor="#4a4a4a", edgecolor="black", linewidth=1.5, zorder=5,
     ))
 
-    ax.add_patch(patches.Circle(
+    ax.add_patch(patches.Circle(   #cerchio esterno del robot, per evidenziare la sua posizione
         (cx, cy), 0.32, fill=False,
-        edgecolor=ROBOT_COLOR, linewidth=3, zorder=6,
+        edgecolor=ROBOT_COLOR, linewidth=3, zorder=6,    #zorder per gestire la sovrapposizione dei livelli di disegno
     ))
 
-    ax.add_patch(patches.Circle(
+    ax.add_patch(patches.Circle(  #cerchio interno del robot, per evidenziare la sua posizione
         (cx, cy + 0.05), 0.08,
         facecolor=ROBOT_COLOR, edgecolor="black", linewidth=1, zorder=7,
     ))
 
-    ax.set_xlim(0, size)
+    ax.set_xlim(0, size) # Imposta i limiti dell'asse x
     ax.set_ylim(0, size)
-    ax.set_xticks([])
+    ax.set_xticks([]) # Imposta i tick dell'asse x (vuoti per rimuovere i numeri)
     ax.set_yticks([])
-    ax.set_aspect("equal")
+    ax.set_aspect("equal") # Imposta l'aspetto dell'asse come uguale per mantenere le proporzioni e farla quadrata
 
     title = f"Passo {step}"
     if action_label:
@@ -141,11 +141,8 @@ def simulate(problem, actions, output_dir=OUTPUT_DIR):
     Esegue il piano passo per passo e salva un'immagine per
     ogni stato attraversato.
 
-    Lo stato contiene:
-        (position, remaining_cleaning)
-
-    La griglia visualizzata viene ricostruita tramite
-    problem.get_grid(state).
+    Lo stato contiene posizione e griglia:
+        (position, grid)
     """
 
     output_dir = Path(output_dir)
@@ -161,10 +158,7 @@ def simulate(problem, actions, output_dir=OUTPUT_DIR):
 
     state = problem.initial
 
-    position, remaining_cleaning = state
-
-    # Ricostruisce la griglia da visualizzare
-    grid = problem.get_grid(state)
+    position, grid = state
 
     # La posizione iniziale resta fissa per la visualizzazione
     start_position = position
@@ -190,11 +184,7 @@ def simulate(problem, actions, output_dir=OUTPUT_DIR):
             action
         )
 
-        position, remaining_cleaning = state
-
-        # Ricostruisce la griglia corrispondente
-        # al nuovo stato
-        grid = problem.get_grid(state)
+        position, grid = state
 
         draw_frame(
             grid,
@@ -222,9 +212,9 @@ def simulate(problem, actions, output_dir=OUTPUT_DIR):
 # ============================================================
 
 def create_gif(output_dir=OUTPUT_DIR, gif_name="simulazione.gif", duration=800):
-    from PIL import Image
+    from PIL import Image #libreria per la gestione delle immagini
 
-    output_dir = Path(output_dir)
+    output_dir = Path(output_dir) 
     frames = sorted(output_dir.glob("frame_*.png"))
 
     if not frames:
