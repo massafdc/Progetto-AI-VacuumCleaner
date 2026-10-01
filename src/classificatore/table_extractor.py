@@ -81,10 +81,10 @@ def create_binary(image):
     binary = cv2.adaptiveThreshold(
         gray,
         255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY_INV,
-        31,
-        10
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C, #calcola la soglia in base alla media dei pixel candidati
+        cv2.THRESH_BINARY_INV,      #inversione dei colori
+        31,   #dimensione del blocco per calcolare la soglia adattiva (31x31 pixel)
+        10    #costante sottratta 
     )
 
     return binary
