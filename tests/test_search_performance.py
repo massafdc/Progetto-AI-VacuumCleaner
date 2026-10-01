@@ -9,7 +9,7 @@ from src.smart_vacuum import SmartVacuum
 # CONFIGURAZIONE
 # ============================================================
 
-SEARCH_TIMEOUT = 20.0
+SEARCH_TIMEOUT = 300.0
 
 
 # ============================================================
