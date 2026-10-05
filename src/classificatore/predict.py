@@ -86,7 +86,7 @@ def preprocess_image(image):
     # appartengono alla lettera.
     _, mask = cv2.threshold(
         image,
-        200,
+        170,
         255,
         cv2.THRESH_BINARY_INV
     )
@@ -114,7 +114,7 @@ def preprocess_image(image):
     # 3. Aggiungi un margine
     # --------------------------------------------------------
 
-    margin = int(max(w, h) * 0.30)
+    margin = int(max(w, h) * 0.15)
 
     x1 = max(0, x_min - margin)
     y1 = max(0, y_min - margin)
