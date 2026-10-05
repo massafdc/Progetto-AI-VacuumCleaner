@@ -72,12 +72,6 @@ def create_binary(image):
         cv2.COLOR_BGR2GRAY
     )
 
-    gray = cv2.GaussianBlur(
-        gray,
-        (5, 5),
-        0
-    )
-
     binary = cv2.adaptiveThreshold(
         gray,
         255,
